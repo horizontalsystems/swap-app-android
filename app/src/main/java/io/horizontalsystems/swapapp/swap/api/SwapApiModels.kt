@@ -58,6 +58,9 @@ data class RouteDto(
     val expiration: String?,
     val memo: String?,
     val qrCodeDataURL: String?,
+    /** BIP21-style payment URI (e.g. `bitcoin:bc1…?amount=0.05`) the QR/deeplink encode. Populated
+     *  by non-THORChain providers on a non-dry quote; null for THORChain (use the memoless flow). */
+    val qrCodeStr: String?,
     val providerSwapId: String?,
 )
 

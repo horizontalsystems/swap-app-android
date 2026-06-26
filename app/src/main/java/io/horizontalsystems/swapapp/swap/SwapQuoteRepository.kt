@@ -95,6 +95,7 @@ class SwapQuoteRepository(
             sendAmount = amountIn,
             amountOut = route.expectedBuyAmount?.toBigDecimalOrNull(),
             memo = route.memo?.takeIf { it.isNotBlank() },
+            paymentUri = route.qrCodeStr?.takeIf { it.isNotBlank() },
             providerSwapId = route.providerSwapId,
             secondsRemaining = expiresIn,
         )
@@ -141,6 +142,8 @@ data class SwapDeposit(
     val sendAmount: BigDecimal,
     val amountOut: BigDecimal?,
     val memo: String?,
+    /** BIP21 payment URI from the provider's route (`qrCodeStr`); null for THORChain. */
+    val paymentUri: String?,
     val providerSwapId: String?,
     val secondsRemaining: Long?,
 )

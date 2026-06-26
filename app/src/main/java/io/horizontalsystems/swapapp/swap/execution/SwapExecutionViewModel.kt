@@ -25,6 +25,7 @@ class SwapExecutionViewModel(
     private val amountIn: BigDecimal,
     private val provider: SwapProvider,
     private val destinationAddress: String,
+    private val refundAddress: String?,
     private val repository: SwapDepositRepository,
 ) : ViewModel() {
 
@@ -34,6 +35,8 @@ class SwapExecutionViewModel(
             error = null,
             depositAddress = null,
             memo = null,
+            paymentUri = null,
+            deeplink = null,
             amountIn = amountIn,
             tokenInCode = tokenIn.ticker,
             tokenOutCode = tokenOut.ticker,
@@ -63,11 +66,14 @@ class SwapExecutionViewModel(
                     amountIn = amountIn,
                     provider = provider,
                     destinationAddress = destinationAddress,
+                    refundAddress = refundAddress,
                 )
                 uiState = uiState.copy(
                     creatingIntent = false,
                     depositAddress = intent.depositAddress,
                     memo = intent.memo,
+                    paymentUri = intent.paymentUri,
+                    deeplink = intent.deeplink,
                     amountIn = intent.amountIn,
                 )
 
@@ -90,6 +96,7 @@ class SwapExecutionViewModel(
         private val amountIn: BigDecimal,
         private val provider: SwapProvider,
         private val destinationAddress: String,
+        private val refundAddress: String?,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -99,6 +106,7 @@ class SwapExecutionViewModel(
                 amountIn = amountIn,
                 provider = provider,
                 destinationAddress = destinationAddress,
+                refundAddress = refundAddress,
                 repository = SwapDepositRepository(),
             ) as T
         }
@@ -110,6 +118,8 @@ data class ActiveSwapUiState(
     val error: String?,
     val depositAddress: String?,
     val memo: String?,
+    val paymentUri: String?,
+    val deeplink: String?,
     val amountIn: BigDecimal,
     val tokenInCode: String,
     val tokenOutCode: String,

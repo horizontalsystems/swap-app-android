@@ -48,7 +48,20 @@ data class SwapToken(
 data class SwapProvider(val id: String) {
     val title: String get() = TITLES[id] ?: id.lowercase().replaceFirstChar { it.uppercase() }
 
+    /**
+     * Whether a non-dry `/quote` needs a refund address. CEX providers reject the request without
+     * one ("Refund address is required if dry is false"); on-chain DEX providers (THORChain,
+     * MayaChain) auto-return funds to the sender, so they don't. Mirrors the swap-bot.
+     */
+    val requiresRefundAddress: Boolean
+        get() = id.uppercase() !in NO_REFUND_PROVIDERS
+
     companion object {
+        private val NO_REFUND_PROVIDERS = setOf(
+            "THORCHAIN", "THORCHAIN_STREAMING",
+            "MAYACHAIN", "MAYACHAIN_STREAMING",
+        )
+
         private val TITLES = mapOf(
             "THORCHAIN" to "THORChain",
             "MAYACHAIN" to "MayaChain",

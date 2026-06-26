@@ -26,8 +26,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.widget.Toast
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
@@ -119,8 +124,10 @@ private fun SwapDetails(
 
     VSpacer(16.dp)
 
-    // QR of the deposit address
-    val qr = rememberQrBitmap(depositAddress)
+    // QR encodes the BIP21 payment URI (address + exact amount) when available, so a wallet scan
+    // pre-fills everything; otherwise the bare address.
+    val qrContent = uiState.paymentUri ?: depositAddress
+    val qr = rememberQrBitmap(qrContent)
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
@@ -130,7 +137,7 @@ private fun SwapDetails(
         if (qr != null) {
             Image(
                 bitmap = qr,
-                contentDescription = "Deposit address QR",
+                contentDescription = "Deposit payment QR",
                 modifier = Modifier.size(200.dp),
             )
         } else {
@@ -139,6 +146,23 @@ private fun SwapDetails(
     }
 
     VSpacer(16.dp)
+
+    // Deeplink — opens a wallet app pre-filled with the address + exact amount.
+    uiState.deeplink?.let { deeplink ->
+        val context = LocalContext.current
+        ButtonPrimaryYellow(
+            modifier = Modifier.fillMaxWidth(),
+            title = "Open in wallet app",
+            onClick = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, deeplink.toUri()))
+                } catch (e: ActivityNotFoundException) {
+                    Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+        VSpacer(12.dp)
+    }
 
     // Deposit address + copy
     Column(

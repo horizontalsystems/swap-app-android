@@ -29,12 +29,16 @@ import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 
 /**
- * Asks the user where to send the swap output. Provides clipboard paste, basic per-chain validation
- * and a Confirm button that hands the validated address back via [onConfirm].
+ * Asks the user for an address on [token]'s chain (recipient or refund). Provides clipboard paste,
+ * basic per-chain validation and a Confirm button that hands the validated address back via
+ * [onConfirm].
  */
 @Composable
-fun DestinationAddressScreen(
-    tokenOut: SwapToken,
+fun AddressInputScreen(
+    token: SwapToken,
+    title: String,
+    heading: String,
+    description: String,
     onBack: () -> Unit,
     onConfirm: (address: String) -> Unit,
 ) {
@@ -42,20 +46,20 @@ fun DestinationAddressScreen(
     var address by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
-    HSScaffold(title = "Recipient", onBack = onBack) {
+    HSScaffold(title = title, onBack = onBack) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
             Text(
-                text = "Where should we send your ${tokenOut.name}?",
+                text = heading,
                 style = ComposeAppTheme.typography.headline1,
                 color = ComposeAppTheme.colors.leah,
             )
             VSpacer(8.dp)
             Text(
-                text = "Enter the ${tokenOut.ticker} address that will receive the swapped funds.",
+                text = description,
                 style = ComposeAppTheme.typography.subhead,
                 color = ComposeAppTheme.colors.grey,
             )
@@ -128,7 +132,7 @@ fun DestinationAddressScreen(
                 title = "Confirm",
                 enabled = address.isNotBlank(),
                 onClick = {
-                    val validationError = SwapAddressValidator.validate(address, tokenOut)
+                    val validationError = SwapAddressValidator.validate(address, token)
                     if (validationError == null) {
                         onConfirm(address.trim())
                     } else {

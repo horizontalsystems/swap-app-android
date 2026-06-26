@@ -18,14 +18,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.components.cell.CellMiddleInfo
 import io.horizontalsystems.swapapp.components.cell.CellPrimary
@@ -34,6 +37,7 @@ import io.horizontalsystems.swapapp.components.cell.hs
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.compose.components.CoinImage
 import io.horizontalsystems.swapapp.compose.components.HsDivider
+import io.horizontalsystems.swapapp.compose.components.HsIconButton
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 
 /**
@@ -215,19 +219,22 @@ private fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
 ) {
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(ComposeAppTheme.colors.lawrence)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(start = 16.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 14.dp),
             textStyle = ComposeAppTheme.typography.body.copy(color = ComposeAppTheme.colors.leah),
             cursorBrush = SolidColor(ComposeAppTheme.colors.jacob),
             decorationBox = { innerTextField ->
@@ -241,5 +248,19 @@ private fun SearchBar(
                 innerTextField()
             },
         )
+
+        if (query.isNotEmpty()) {
+            HsIconButton(
+                onClick = { onQueryChange("") },
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.close_24),
+                    contentDescription = "Clear search",
+                    tint = ComposeAppTheme.colors.grey,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
     }
 }
