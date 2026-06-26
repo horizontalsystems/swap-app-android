@@ -22,13 +22,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -43,6 +51,7 @@ import io.horizontalsystems.swapapp.compose.components.HSpacer
 import io.horizontalsystems.swapapp.compose.components.HsDivider
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.DecimalFormat
 
 private enum class SelectTarget { In, Out }
@@ -127,62 +136,43 @@ private fun SwapForm(
 ) {
     HSScaffold(title = "Swap") {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 'You pay' amount — editable; kept in sync when it changes outside the field.
-            var amountText by remember {
-                mutableStateOf(uiState.amountIn?.stripTrailingZeros()?.toPlainString() ?: "")
-            }
-            LaunchedEffect(uiState.amountIn) {
-                val external = uiState.amountIn
-                if (external != amountText.toBigDecimalOrNull()) {
-                    amountText = external?.stripTrailingZeros()?.toPlainString() ?: ""
-                }
-            }
-
             // Two token rows separated by a divider, with the switch button centered on it.
             Box(contentAlignment = Alignment.Center) {
                 Column {
-                    SwapTokenRow(token = uiState.tokenIn, fiat = uiState.fiatIn, onClickToken = onClickTokenIn) {
-                        BasicTextField(
-                            value = amountText,
-                            onValueChange = { input ->
-                                val filtered = input.toDecimalInput()
-                                amountText = filtered
-                                onEnterAmount(filtered.toBigDecimalOrNull())
-                            },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = ComposeAppTheme.typography.headline1.copy(
-                                color = ComposeAppTheme.colors.leah,
-                                textAlign = TextAlign.End,
-                            ),
-                            cursorBrush = SolidColor(ComposeAppTheme.colors.jacob),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            decorationBox = { inner ->
-                                if (amountText.isEmpty()) {
-                                    Text(
-                                        text = "0",
-                                        modifier = Modifier.fillMaxWidth(),
-                                        style = ComposeAppTheme.typography.headline1,
-                                        color = ComposeAppTheme.colors.grey,
-                                        textAlign = TextAlign.End,
-                                    )
-                                }
-                                inner()
-                            },
+                    // 'You pay' — token amount and fiat amount, both editable.
+                    SwapTokenRow(token = uiState.tokenIn, onClickToken = onClickTokenIn) {
+                        PayAmount(
+                            amountIn = uiState.amountIn,
+                            priceIn = uiState.priceIn,
+                            decimals = uiState.tokenIn?.decimals ?: 8,
+                            onEnterAmount = onEnterAmount,
                         )
                     }
 
                     HsDivider()
 
-                    // 'You get' amount — read-only, populated by the fetched quote.
-                    SwapTokenRow(token = uiState.tokenOut, fiat = uiState.fiatOut, onClickToken = onClickTokenOut) {
-                        Text(
-                            text = uiState.amountOut?.stripTrailingZeros()?.toPlainString() ?: "0",
-                            style = ComposeAppTheme.typography.headline1,
-                            color = if (uiState.amountOut != null) ComposeAppTheme.colors.leah else ComposeAppTheme.colors.grey,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    // 'You get' — read-only, populated by the fetched quote.
+                    SwapTokenRow(token = uiState.tokenOut, onClickToken = onClickTokenOut) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = uiState.amountOut?.stripTrailingZeros()?.toPlainString() ?: "0",
+                                style = ComposeAppTheme.typography.headline1,
+                                color = if (uiState.amountOut != null) ComposeAppTheme.colors.leah else ComposeAppTheme.colors.grey,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (uiState.fiatOut != null) {
+                                Text(
+                                    text = formatFiat(uiState.fiatOut),
+                                    style = ComposeAppTheme.typography.subhead,
+                                    color = ComposeAppTheme.colors.grey,
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -217,12 +207,11 @@ private fun SwapForm(
 
 /**
  * A flat token row: tappable coin image + ticker (with dropdown caret) + network badge on the left,
- * and the amount ([amountContent]) right-aligned. Mirrors the design's `CellPrimary` layout.
+ * and the amount ([amountContent]) on the right. Mirrors the design's `CellPrimary` layout.
  */
 @Composable
 private fun SwapTokenRow(
     token: SwapToken?,
-    fiat: BigDecimal?,
     onClickToken: () -> Unit,
     amountContent: @Composable () -> Unit,
 ) {
@@ -263,21 +252,200 @@ private fun SwapTokenRow(
                 }
             }
         }
-        Column(
-            modifier = Modifier.weight(1f),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        Box(modifier = Modifier.weight(1f)) {
             amountContent()
-            if (fiat != null) {
-                Text(
-                    text = formatFiat(fiat),
-                    style = ComposeAppTheme.typography.subhead,
-                    color = ComposeAppTheme.colors.grey,
-                )
-            }
         }
     }
+}
+
+/**
+ * The editable 'You pay' amount: a token-denominated field on top and a USD field below, each
+ * driving the other — ported from Unstoppable's `AmountInput`/`FiatAmountInput`. We have no
+ * `FiatService`, so the coin↔fiat conversion happens here via [priceIn]; [onEnterAmount] always
+ * receives the token amount, so the quote engine is unaffected. The fiat field accepts input only
+ * when a price is known.
+ */
+@Composable
+private fun PayAmount(
+    amountIn: BigDecimal?,
+    priceIn: BigDecimal?,
+    decimals: Int,
+    onEnterAmount: (BigDecimal?) -> Unit,
+) {
+    fun fiatFor(coin: BigDecimal?): BigDecimal? =
+        if (coin != null && priceIn != null) {
+            coin.multiply(priceIn).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros()
+        } else {
+            null
+        }
+
+    var coinAmount by remember { mutableStateOf(amountIn) }
+    var fiatAmount by remember { mutableStateOf(fiatFor(amountIn)) }
+
+    // Resync both fields when the coin amount changes outside this input (e.g. switching pairs).
+    LaunchedEffect(amountIn) {
+        if (amountIn?.stripTrailingZeros() != coinAmount?.stripTrailingZeros()) {
+            coinAmount = amountIn
+            fiatAmount = fiatFor(amountIn)
+        }
+    }
+    // Populate the fiat field once a price arrives (without disturbing active typing).
+    LaunchedEffect(priceIn) {
+        fiatAmount = fiatFor(coinAmount)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        AmountInput(
+            value = coinAmount,
+            onValueChange = { coin ->
+                coinAmount = coin
+                fiatAmount = fiatFor(coin)
+                onEnterAmount(coin)
+            },
+        )
+        FiatAmountInput(
+            value = fiatAmount,
+            enabled = priceIn != null,
+            onValueChange = { fiat ->
+                fiatAmount = fiat
+                val coin = if (fiat != null && priceIn != null && priceIn.signum() > 0) {
+                    fiat.divide(priceIn, decimals, RoundingMode.DOWN)
+                } else {
+                    null
+                }
+                coinAmount = coin
+                onEnterAmount(coin)
+            },
+        )
+    }
+}
+
+/**
+ * Token-denominated amount field — a faithful port of Unstoppable's `AmountInput`: full-width,
+ * right-aligned, with the cursor sent to the end on focus and a right-aligned "0" placeholder.
+ */
+@Composable
+private fun AmountInput(
+    value: BigDecimal?,
+    onValueChange: (BigDecimal?) -> Unit,
+) {
+    var amount by rememberSaveable { mutableStateOf(value) }
+    var textFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(text = amount?.toPlainString() ?: ""))
+    }
+
+    LaunchedEffect(value) {
+        if (value?.stripTrailingZeros() != amount?.stripTrailingZeros()) {
+            amount = value
+            textFieldValue = TextFieldValue(text = amount?.toPlainString() ?: "")
+        }
+    }
+
+    var setCursorToEndOnFocused by remember { mutableStateOf(false) }
+
+    BasicTextField(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged {
+                setCursorToEndOnFocused = it.isFocused
+                if (!it.isFocused) {
+                    textFieldValue = textFieldValue.copy(selection = TextRange.Zero)
+                }
+            },
+        value = textFieldValue,
+        onValueChange = { newValue ->
+            try {
+                val text = newValue.text
+                amount = if (text.isBlank()) null else text.toBigDecimal()
+
+                textFieldValue = if (!setCursorToEndOnFocused) {
+                    newValue
+                } else {
+                    setCursorToEndOnFocused = false
+                    newValue.copy(selection = TextRange(text.length))
+                }
+                onValueChange(amount)
+            } catch (e: Exception) {
+                // Reject keystrokes that don't form a valid number (e.g. a second dot).
+            }
+        },
+        textStyle = ComposeAppTheme.typography.headline1.copy(
+            color = ComposeAppTheme.colors.leah,
+            textAlign = TextAlign.End,
+        ),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        cursorBrush = SolidColor(ComposeAppTheme.colors.leah),
+        decorationBox = { innerTextField ->
+            if (textFieldValue.text.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        text = "0",
+                        style = ComposeAppTheme.typography.headline1,
+                        color = ComposeAppTheme.colors.grey,
+                    )
+                }
+            }
+            innerTextField()
+        },
+    )
+}
+
+/**
+ * USD amount field — a faithful port of Unstoppable's `FiatAmountInput`: the "$" prefix (and the
+ * empty-state "0") is rendered via a [VisualTransformation] so it always hugs the digits.
+ */
+@Composable
+private fun FiatAmountInput(
+    value: BigDecimal?,
+    enabled: Boolean,
+    onValueChange: (BigDecimal?) -> Unit,
+) {
+    val symbol = "$"
+    var text by remember(value) { mutableStateOf(value?.toPlainString() ?: "") }
+    val displayTransformation = remember {
+        VisualTransformation { original ->
+            val prefixLen = symbol.length
+            val isEmpty = original.text.isEmpty()
+            val visual = AnnotatedString(symbol + original.text + if (isEmpty) "0" else "")
+            TransformedText(
+                text = visual,
+                offsetMapping = object : OffsetMapping {
+                    override fun originalToTransformed(offset: Int) =
+                        if (isEmpty) prefixLen + 1 else offset + prefixLen
+
+                    override fun transformedToOriginal(offset: Int) =
+                        (offset - prefixLen).coerceIn(0, original.text.length)
+                },
+            )
+        }
+    }
+    BasicTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = text,
+        onValueChange = {
+            try {
+                val amount = if (it.isBlank()) null else it.toBigDecimal()
+                text = it
+                onValueChange(amount)
+            } catch (e: Exception) {
+                // Reject invalid number input.
+            }
+        },
+        enabled = enabled,
+        textStyle = ComposeAppTheme.typography.body.copy(
+            color = ComposeAppTheme.colors.grey,
+            textAlign = TextAlign.End,
+        ),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        cursorBrush = SolidColor(ComposeAppTheme.colors.leah),
+        visualTransformation = displayTransformation,
+    )
 }
 
 /** USD value formatting matching swap-bot: no decimals ≥ $1,000, two decimals ≥ $1, else compact. */
@@ -382,21 +550,4 @@ private fun errorMessage(error: Throwable): String = when (error) {
     is SwapRouteNotFound -> "No route found for this pair"
     is java.io.IOException -> "Network error. Check your connection."
     else -> "Couldn't fetch a quote"
-}
-
-/** Keep only digits and a single decimal separator, normalised to '.'. */
-private fun String.toDecimalInput(): String {
-    val normalized = replace(',', '.')
-    val sb = StringBuilder()
-    var dotSeen = false
-    for (ch in normalized) {
-        when {
-            ch.isDigit() -> sb.append(ch)
-            ch == '.' && !dotSeen -> {
-                dotSeen = true
-                sb.append(ch)
-            }
-        }
-    }
-    return sb.toString()
 }

@@ -81,6 +81,7 @@ class MainSwapViewModel : ViewModel() {
             quote = s.quote,
             quotes = s.quotes,
             error = s.error,
+            priceIn = priceIn,
             fiatIn = priceIn?.multiply(s.amountIn ?: BigDecimal.ZERO),
             fiatOut = priceOut?.multiply(amountOut ?: BigDecimal.ZERO),
         )
@@ -96,6 +97,7 @@ data class MainSwapUiState(
     val quote: SwapProviderQuote?,
     val quotes: List<SwapProviderQuote>,
     val error: Throwable?,
+    val priceIn: BigDecimal? = null,
     val fiatIn: BigDecimal? = null,
     val fiatOut: BigDecimal? = null,
 ) {
