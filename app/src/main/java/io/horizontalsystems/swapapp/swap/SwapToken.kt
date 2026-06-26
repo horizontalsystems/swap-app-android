@@ -14,6 +14,7 @@ data class SwapToken(
     val chain: String,
     val decimals: Int,
     val logoUrl: String?,
+    val coingeckoId: String?,
     val providers: List<String>,
 ) {
     companion object {
@@ -29,6 +30,7 @@ data class SwapToken(
                 chain = chain,
                 decimals = dto.decimals ?: 8,
                 logoUrl = dto.logoURI,
+                coingeckoId = dto.coingeckoId,
                 providers = dto.providers ?: emptyList(),
             )
         }

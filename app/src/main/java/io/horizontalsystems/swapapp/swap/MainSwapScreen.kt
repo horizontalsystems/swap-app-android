@@ -43,6 +43,7 @@ import io.horizontalsystems.swapapp.compose.components.HSpacer
 import io.horizontalsystems.swapapp.compose.components.HsDivider
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 import java.math.BigDecimal
+import java.text.DecimalFormat
 
 private enum class SelectTarget { In, Out }
 
@@ -140,7 +141,7 @@ private fun SwapForm(
             // Two token rows separated by a divider, with the switch button centered on it.
             Box(contentAlignment = Alignment.Center) {
                 Column {
-                    SwapTokenRow(token = uiState.tokenIn, onClickToken = onClickTokenIn) {
+                    SwapTokenRow(token = uiState.tokenIn, fiat = uiState.fiatIn, onClickToken = onClickTokenIn) {
                         BasicTextField(
                             value = amountText,
                             onValueChange = { input ->
@@ -174,7 +175,7 @@ private fun SwapForm(
                     HsDivider()
 
                     // 'You get' amount — read-only, populated by the fetched quote.
-                    SwapTokenRow(token = uiState.tokenOut, onClickToken = onClickTokenOut) {
+                    SwapTokenRow(token = uiState.tokenOut, fiat = uiState.fiatOut, onClickToken = onClickTokenOut) {
                         Text(
                             text = uiState.amountOut?.stripTrailingZeros()?.toPlainString() ?: "0",
                             style = ComposeAppTheme.typography.headline1,
@@ -221,6 +222,7 @@ private fun SwapForm(
 @Composable
 private fun SwapTokenRow(
     token: SwapToken?,
+    fiat: BigDecimal?,
     onClickToken: () -> Unit,
     amountContent: @Composable () -> Unit,
 ) {
@@ -261,13 +263,33 @@ private fun SwapTokenRow(
                 }
             }
         }
-        Box(
+        Column(
             modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.CenterEnd,
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             amountContent()
+            if (fiat != null) {
+                Text(
+                    text = formatFiat(fiat),
+                    style = ComposeAppTheme.typography.subhead,
+                    color = ComposeAppTheme.colors.grey,
+                )
+            }
         }
     }
+}
+
+/** USD value formatting matching swap-bot: no decimals ≥ $1,000, two decimals ≥ $1, else compact. */
+private fun formatFiat(value: BigDecimal): String {
+    val abs = value.abs()
+    val format = when {
+        abs.signum() == 0 -> return "$0"
+        abs >= BigDecimal(1000) -> DecimalFormat("#,##0")
+        abs >= BigDecimal.ONE -> DecimalFormat("#,##0.00")
+        else -> DecimalFormat("0.####")
+    }
+    return "$" + format.format(value)
 }
 
 /** Circular switch button, with a background-coloured ring so it cleanly straddles the divider. */

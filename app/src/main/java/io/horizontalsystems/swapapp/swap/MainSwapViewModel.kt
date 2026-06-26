@@ -21,14 +21,23 @@ import java.math.BigDecimal
 class MainSwapViewModel : ViewModel() {
 
     private val quoteService = SwapQuoteService()
+    private val priceService = PriceService()
 
-    var uiState by mutableStateOf(stateFrom(quoteService.stateFlow.value))
+    private var quoteState = quoteService.stateFlow.value
+    private var prices: Map<String, BigDecimal> = emptyMap()
+    private var pricedIds: Set<String> = emptySet()
+
+    var uiState by mutableStateOf(buildState())
         private set
 
     init {
         quoteService.start()
         viewModelScope.launch {
-            quoteService.stateFlow.collect { uiState = stateFrom(it) }
+            quoteService.stateFlow.collect { state ->
+                quoteState = state
+                uiState = buildState()
+                refreshPrices(state.tokenIn, state.tokenOut)
+            }
         }
     }
 
@@ -40,16 +49,42 @@ class MainSwapViewModel : ViewModel() {
     /** Apply the user's preferred provider; SwapQuoteService promotes it to the primary quote. */
     fun onSelectQuote(quote: SwapProviderQuote) = quoteService.selectQuote(quote)
 
-    private fun stateFrom(s: SwapQuoteService.State) = MainSwapUiState(
-        amountIn = s.amountIn,
-        tokenIn = s.tokenIn,
-        tokenOut = s.tokenOut,
-        amountOut = s.quote?.amountOut,
-        quoting = s.quoting,
-        quote = s.quote,
-        quotes = s.quotes,
-        error = s.error,
-    )
+    /** Fetch USD prices when the pair's CoinGecko ids change; the service caches the rest. */
+    private fun refreshPrices(tokenIn: SwapToken?, tokenOut: SwapToken?) {
+        val ids = listOfNotNull(tokenIn?.coingeckoId, tokenOut?.coingeckoId).toSet()
+        if (ids == pricedIds) return
+        pricedIds = ids
+
+        if (ids.isEmpty()) {
+            prices = emptyMap()
+            uiState = buildState()
+            return
+        }
+
+        viewModelScope.launch {
+            prices = priceService.prices(ids.toList())
+            uiState = buildState()
+        }
+    }
+
+    private fun buildState(): MainSwapUiState {
+        val s = quoteState
+        val amountOut = s.quote?.amountOut
+        val priceIn = s.tokenIn?.coingeckoId?.let { prices[it] }
+        val priceOut = s.tokenOut?.coingeckoId?.let { prices[it] }
+        return MainSwapUiState(
+            amountIn = s.amountIn,
+            tokenIn = s.tokenIn,
+            tokenOut = s.tokenOut,
+            amountOut = amountOut,
+            quoting = s.quoting,
+            quote = s.quote,
+            quotes = s.quotes,
+            error = s.error,
+            fiatIn = priceIn?.multiply(s.amountIn ?: BigDecimal.ZERO),
+            fiatOut = priceOut?.multiply(amountOut ?: BigDecimal.ZERO),
+        )
+    }
 }
 
 data class MainSwapUiState(
@@ -61,6 +96,8 @@ data class MainSwapUiState(
     val quote: SwapProviderQuote?,
     val quotes: List<SwapProviderQuote>,
     val error: Throwable?,
+    val fiatIn: BigDecimal? = null,
+    val fiatOut: BigDecimal? = null,
 ) {
     val selectedProvider: SwapProvider? get() = quote?.provider
 
