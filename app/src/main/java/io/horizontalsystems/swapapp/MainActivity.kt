@@ -2,6 +2,7 @@ package io.horizontalsystems.swapapp
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
@@ -61,23 +62,30 @@ private fun SwapApp() {
             },
         )
 
-        destination == null -> AddressInputScreen(
-            token = data.tokenOut,
-            title = "Recipient",
-            heading = "Where should we send your ${data.tokenOut.name}?",
-            description = "Enter the ${data.tokenOut.ticker} address that will receive the swapped funds.",
-            onBack = { proceed = null },
-            onConfirm = { destination = it },
-        )
+        destination == null -> {
+            // System back gesture/button mirrors the on-screen back button.
+            BackHandler { proceed = null }
+            AddressInputScreen(
+                token = data.tokenOut,
+                title = "Recipient",
+                heading = "Where should we send your ${data.tokenOut.name}?",
+                description = "Enter the ${data.tokenOut.ticker} address that will receive the swapped funds.",
+                onBack = { proceed = null },
+                onConfirm = { destination = it },
+            )
+        }
 
-        needsRefund && refund == null -> AddressInputScreen(
-            token = data.tokenIn,
-            title = "Refund address",
-            heading = "Where should we refund your ${data.tokenIn.name} if the swap fails?",
-            description = "This provider requires a refund address. If the swap can't complete, your ${data.tokenIn.ticker} is returned here.",
-            onBack = { destination = null },
-            onConfirm = { refund = it },
-        )
+        needsRefund && refund == null -> {
+            BackHandler { destination = null }
+            AddressInputScreen(
+                token = data.tokenIn,
+                title = "Refund address",
+                heading = "Where should we refund your ${data.tokenIn.name} if the swap fails?",
+                description = "This provider requires a refund address. If the swap can't complete, your ${data.tokenIn.ticker} is returned here.",
+                onBack = { destination = null },
+                onConfirm = { refund = it },
+            )
+        }
 
         else -> {
             val viewModel = viewModel<SwapExecutionViewModel>(
@@ -91,9 +99,11 @@ private fun SwapApp() {
                     refundAddress = refund,
                 ),
             )
+            val onBack = { if (needsRefund) refund = null else destination = null }
+            BackHandler { onBack() }
             ActiveSwapTrackingScreen(
                 uiState = viewModel.uiState,
-                onBack = { if (needsRefund) refund = null else destination = null },
+                onBack = onBack,
                 onDone = {
                     // Swap finished — return to a fresh swap screen.
                     refund = null
