@@ -1,5 +1,6 @@
 package io.horizontalsystems.swapapp.swap
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,15 +27,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
+import io.horizontalsystems.swapapp.compose.components.Badge
 import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
 import io.horizontalsystems.swapapp.compose.components.CoinImage
 import io.horizontalsystems.swapapp.compose.components.HSpacer
+import io.horizontalsystems.swapapp.compose.components.HsDivider
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 import java.math.BigDecimal
 
@@ -117,17 +124,12 @@ private fun SwapForm(
     onClickProviders: () -> Unit,
     onClickNext: () -> Unit,
 ) {
-    HSScaffold(title = "Swap", onBack = onClose) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            // You Pay — editable amount
+    HSScaffold(title = "Swap") {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 'You pay' amount — editable; kept in sync when it changes outside the field.
             var amountText by remember {
                 mutableStateOf(uiState.amountIn?.stripTrailingZeros()?.toPlainString() ?: "")
             }
-            // Keep the field in sync when the amount changes outside the field (e.g. switch pairs).
             LaunchedEffect(uiState.amountIn) {
                 val external = uiState.amountIn
                 if (external != amountText.toBigDecimalOrNull()) {
@@ -135,156 +137,170 @@ private fun SwapForm(
                 }
             }
 
-            SwapCard(
-                label = "You Pay",
-                token = uiState.tokenIn,
-                onClickToken = onClickTokenIn,
-            ) {
-                BasicTextField(
-                    value = amountText,
-                    onValueChange = { input ->
-                        val filtered = input.toDecimalInput()
-                        amountText = filtered
-                        onEnterAmount(filtered.toBigDecimalOrNull())
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = ComposeAppTheme.typography.headline1.copy(color = ComposeAppTheme.colors.leah),
-                    cursorBrush = SolidColor(ComposeAppTheme.colors.jacob),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    decorationBox = { inner ->
-                        if (amountText.isEmpty()) {
-                            Text(
-                                "0",
-                                style = ComposeAppTheme.typography.headline1,
-                                color = ComposeAppTheme.colors.grey,
-                            )
-                        }
-                        inner()
-                    },
-                )
+            // Two token rows separated by a divider, with the switch button centered on it.
+            Box(contentAlignment = Alignment.Center) {
+                Column {
+                    SwapTokenRow(token = uiState.tokenIn, onClickToken = onClickTokenIn) {
+                        BasicTextField(
+                            value = amountText,
+                            onValueChange = { input ->
+                                val filtered = input.toDecimalInput()
+                                amountText = filtered
+                                onEnterAmount(filtered.toBigDecimalOrNull())
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = ComposeAppTheme.typography.headline1.copy(
+                                color = ComposeAppTheme.colors.leah,
+                                textAlign = TextAlign.End,
+                            ),
+                            cursorBrush = SolidColor(ComposeAppTheme.colors.jacob),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            decorationBox = { inner ->
+                                if (amountText.isEmpty()) {
+                                    Text(
+                                        text = "0",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        style = ComposeAppTheme.typography.headline1,
+                                        color = ComposeAppTheme.colors.grey,
+                                        textAlign = TextAlign.End,
+                                    )
+                                }
+                                inner()
+                            },
+                        )
+                    }
+
+                    HsDivider()
+
+                    // 'You get' amount — read-only, populated by the fetched quote.
+                    SwapTokenRow(token = uiState.tokenOut, onClickToken = onClickTokenOut) {
+                        Text(
+                            text = uiState.amountOut?.stripTrailingZeros()?.toPlainString() ?: "0",
+                            style = ComposeAppTheme.typography.headline1,
+                            color = if (uiState.amountOut != null) ComposeAppTheme.colors.leah else ComposeAppTheme.colors.grey,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                SwitchPairsButton(onClick = onSwitchPairs)
             }
 
-            VSpacer(8.dp)
-            SwitchPairsButton(onClick = onSwitchPairs)
-            VSpacer(8.dp)
+            Column(modifier = Modifier.padding(16.dp)) {
+                StatusText(uiState)
 
-            // You Get — read-only, populated by the fetched quote
-            SwapCard(
-                label = "You Get",
-                token = uiState.tokenOut,
-                onClickToken = onClickTokenOut,
-            ) {
-                Text(
-                    text = uiState.amountOut?.stripTrailingZeros()?.toPlainString() ?: "0",
-                    style = ComposeAppTheme.typography.headline1,
-                    color = if (uiState.amountOut != null) ComposeAppTheme.colors.leah else ComposeAppTheme.colors.grey,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+                // Provider selector — shows the winning quote and opens the full provider list.
+                if (uiState.quotes.isNotEmpty()) {
+                    VSpacer(16.dp)
+                    ProviderSelectorRow(
+                        providerTitle = uiState.quote?.provider?.title ?: "Select provider",
+                        quoteCount = uiState.quotes.size,
+                        onClick = onClickProviders,
+                    )
+                }
 
-            VSpacer(16.dp)
-            StatusText(uiState)
-
-            // Provider selector — shows the winning quote and opens the full provider list.
-            if (uiState.quotes.isNotEmpty()) {
                 VSpacer(16.dp)
-                ProviderSelectorRow(
-                    providerTitle = uiState.quote?.provider?.title ?: "Select provider",
-                    quoteCount = uiState.quotes.size,
-                    onClick = onClickProviders,
+                ButtonPrimaryYellow(
+                    modifier = Modifier.fillMaxWidth(),
+                    title = "Next",
+                    enabled = uiState.canProceed,
+                    loadingIndicator = uiState.quoting,
+                    onClick = onClickNext,
                 )
             }
-
-            VSpacer(16.dp)
-            ButtonPrimaryYellow(
-                modifier = Modifier.fillMaxWidth(),
-                title = "Next",
-                enabled = uiState.canProceed,
-                loadingIndicator = uiState.quoting,
-                onClick = onClickNext,
-            )
         }
     }
 }
 
+/**
+ * A flat token row: tappable coin image + ticker (with dropdown caret) + network badge on the left,
+ * and the amount ([amountContent]) right-aligned. Mirrors the design's `CellPrimary` layout.
+ */
 @Composable
-private fun SwapCard(
-    label: String,
+private fun SwapTokenRow(
     token: SwapToken?,
     onClickToken: () -> Unit,
     amountContent: @Composable () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(ComposeAppTheme.colors.lawrence)
-            .padding(16.dp)
-    ) {
-        Text(
-            text = label,
-            style = ComposeAppTheme.typography.subhead,
-            color = ComposeAppTheme.colors.grey,
-        )
-        VSpacer(8.dp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.weight(1f)) {
-                amountContent()
-            }
-            HSpacer(12.dp)
-            TokenSelectorButton(token = token, onClick = onClickToken)
-        }
-    }
-}
-
-@Composable
-private fun TokenSelectorButton(token: SwapToken?, onClick: () -> Unit) {
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(ComposeAppTheme.colors.tyler)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 24.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (token != null) {
-            CoinImage(
-                url = token.logoUrl,
-                modifier = Modifier.size(24.dp),
-            )
-            HSpacer(8.dp)
-            Text(
-                text = token.ticker,
-                style = ComposeAppTheme.typography.headline2,
-                color = ComposeAppTheme.colors.leah,
-            )
-        } else {
-            Text(
-                text = "Select",
-                style = ComposeAppTheme.typography.headline2,
-                color = ComposeAppTheme.colors.jacob,
-            )
+        Row(
+            modifier = Modifier.clickable(onClick = onClickToken),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (token != null) {
+                CoinImage(url = token.logoUrl, modifier = Modifier.size(40.dp))
+            } else {
+                Image(
+                    painter = painterResource(R.drawable.coin_placeholder),
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = token?.ticker ?: "Select",
+                        style = ComposeAppTheme.typography.headline1,
+                        color = if (token != null) ComposeAppTheme.colors.leah else ComposeAppTheme.colors.jacob,
+                    )
+                    Text(text = "▾", color = ComposeAppTheme.colors.grey)
+                }
+                if (token != null) {
+                    Badge(text = networkName(token))
+                }
+            }
         }
-        HSpacer(4.dp)
-        Text(text = "▾", color = ComposeAppTheme.colors.grey)
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            amountContent()
+        }
     }
 }
 
+/** Circular switch button, with a background-coloured ring so it cleanly straddles the divider. */
 @Composable
 private fun SwitchPairsButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(36.dp)
             .clip(CircleShape)
-            .background(ComposeAppTheme.colors.lawrence)
-            .clickable(onClick = onClick),
+            .background(ComposeAppTheme.colors.tyler)
+            .padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = "⇅", style = ComposeAppTheme.typography.headline2, color = ComposeAppTheme.colors.jacob)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(ComposeAppTheme.colors.blade)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.arrow_down_24),
+                contentDescription = "Switch tokens",
+                tint = ComposeAppTheme.colors.leah,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
+
+/** Human-readable network badge text from the token's chain id (e.g. "optimism" -> "Optimism"). */
+private fun networkName(token: SwapToken): String =
+    token.chain.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
 
 @Composable
 private fun ProviderSelectorRow(
