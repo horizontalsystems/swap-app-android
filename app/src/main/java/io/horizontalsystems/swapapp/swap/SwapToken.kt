@@ -17,6 +17,13 @@ data class SwapToken(
     val coingeckoId: String?,
     val providers: List<String>,
 ) {
+    /**
+     * True for a chain's native coin (e.g. `BTC.BTC`, `ETH.ETH`). Native tokens have no contract
+     * address, so their [identifier] is just `CHAIN.TICKER` with no `-ADDRESS` suffix — verified to
+     * match `address == null` across the whole `/tokens/all` universe.
+     */
+    val isNative: Boolean get() = !identifier.contains("-")
+
     companion object {
         /** Maps a DTO to a token, or null if it lacks the fields we need (so it's skipped). */
         fun fromDto(dto: SwapTokenDto): SwapToken? {
