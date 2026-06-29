@@ -37,6 +37,7 @@ class SwapExecutionViewModel(
             memo = null,
             paymentUri = null,
             deeplink = null,
+            trackUrl = null,
             amountIn = amountIn,
             tokenInCode = tokenIn.ticker,
             tokenOutCode = tokenOut.ticker,
@@ -74,6 +75,7 @@ class SwapExecutionViewModel(
                     memo = intent.memo,
                     paymentUri = intent.paymentUri,
                     deeplink = intent.deeplink,
+                    trackUrl = intent.trackUrl,
                     amountIn = intent.amountIn,
                 )
 
@@ -120,6 +122,7 @@ data class ActiveSwapUiState(
     val memo: String?,
     val paymentUri: String?,
     val deeplink: String?,
+    val trackUrl: String?,
     val amountIn: BigDecimal,
     val tokenInCode: String,
     val tokenOutCode: String,

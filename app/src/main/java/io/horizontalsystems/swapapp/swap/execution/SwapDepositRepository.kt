@@ -1,6 +1,7 @@
 package io.horizontalsystems.swapapp.swap.execution
 
 import android.util.Log
+import androidx.core.net.toUri
 import io.horizontalsystems.swapapp.swap.SwapProvider
 import io.horizontalsystems.swapapp.swap.SwapQuoteRepository
 import io.horizontalsystems.swapapp.swap.SwapToken
@@ -49,6 +50,8 @@ data class SwapIntent(
     val memo: String?,
     val paymentUri: String?,
     val deeplink: String?,
+    /** Hosted page that follows this swap to completion (Unstoppable's `/track`); null if unbuildable. */
+    val trackUrl: String?,
     val secondsRemaining: Long?,
 )
 
@@ -90,14 +93,27 @@ class SwapDepositRepository(
         // reference, so the deposit matches without a memo. Falls back to the memo flow on failure.
         if (provider.id == "THORCHAIN" && deposit.memo != null) {
             runMemoless(tokenIn.identifier, deposit.memo, amountIn)?.let { memoless ->
+                val depositAddress = memoless.inboundAddress ?: deposit.depositAddress
                 return SwapIntent(
                     reference = memoless.reference,
-                    depositAddress = memoless.inboundAddress ?: deposit.depositAddress,
+                    depositAddress = depositAddress,
                     amountIn = memoless.sendAmount,
                     tokenIn = tokenIn,
                     memo = null,
                     paymentUri = memoless.paymentUri,
                     deeplink = deeplink(memoless.paymentUri),
+                    trackUrl = buildTrackUrl(
+                        provider = provider.id,
+                        inboundAddr = depositAddress,
+                        chainId = tokenIn.chainId,
+                        providerSwapId = deposit.providerSwapId,
+                        fromAsset = tokenIn.identifier,
+                        fromAmount = memoless.sendAmount,
+                        toAsset = tokenOut.identifier,
+                        toAmount = deposit.amountOut,
+                        toAddress = destinationAddress,
+                        refundAddress = refundAddress,
+                    ),
                     secondsRemaining = memoless.secondsRemaining ?: deposit.secondsRemaining,
                 )
             }
@@ -111,8 +127,59 @@ class SwapDepositRepository(
             memo = deposit.memo,
             paymentUri = deposit.paymentUri,
             deeplink = deeplink(deposit.paymentUri),
+            trackUrl = buildTrackUrl(
+                provider = provider.id,
+                inboundAddr = deposit.depositAddress,
+                chainId = tokenIn.chainId,
+                providerSwapId = deposit.providerSwapId,
+                fromAsset = tokenIn.identifier,
+                fromAmount = deposit.sendAmount,
+                toAsset = tokenOut.identifier,
+                toAmount = deposit.amountOut,
+                toAddress = destinationAddress,
+                refundAddress = refundAddress,
+            ),
             secondsRemaining = deposit.secondsRemaining,
         )
+    }
+
+    /**
+     * Build the hosted swap-tracking URL, ported from the swap-bot's `buildTrackUrl`. On-chain DEX
+     * providers (THORChain, NEAR) are tracked by their deposit address; everyone else by the
+     * provider's swap id. Returns null when the required id for the provider is missing.
+     */
+    private fun buildTrackUrl(
+        provider: String,
+        inboundAddr: String?,
+        chainId: String?,
+        providerSwapId: String?,
+        fromAsset: String?,
+        fromAmount: BigDecimal?,
+        toAsset: String?,
+        toAmount: BigDecimal?,
+        toAddress: String?,
+        refundAddress: String?,
+    ): String? {
+        val builder = "https://swap.unstoppable.money/track".toUri().buildUpon()
+        builder.appendQueryParameter("provider", provider)
+
+        if (provider.uppercase() == "THORCHAIN" || provider.uppercase() == "NEAR") {
+            if (inboundAddr.isNullOrBlank()) return null
+            builder.appendQueryParameter("depositAddress", inboundAddr)
+        } else {
+            if (providerSwapId.isNullOrBlank()) return null
+            builder.appendQueryParameter("providerSwapId", providerSwapId)
+        }
+
+        chainId?.let { builder.appendQueryParameter("chainId", it) }
+        fromAsset?.let { builder.appendQueryParameter("fromAsset", it) }
+        fromAmount?.let { builder.appendQueryParameter("fromAmount", it.stripTrailingZeros().toPlainString()) }
+        toAsset?.let { builder.appendQueryParameter("toAsset", it) }
+        toAmount?.let { builder.appendQueryParameter("toAmount", it.stripTrailingZeros().toPlainString()) }
+        toAddress?.let { builder.appendQueryParameter("toAddress", it) }
+        refundAddress?.let { builder.appendQueryParameter("refundAddress", it) }
+
+        return builder.build().toString()
     }
 
     /**

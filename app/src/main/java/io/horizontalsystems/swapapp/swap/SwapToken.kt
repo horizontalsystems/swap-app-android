@@ -12,6 +12,8 @@ data class SwapToken(
     val name: String,
     val ticker: String,
     val chain: String,
+    /** API chain slug (e.g. "bitcoin", "ethereum"); enriches the swap tracking URL. */
+    val chainId: String?,
     val decimals: Int,
     val logoUrl: String?,
     val coingeckoId: String?,
@@ -35,6 +37,7 @@ data class SwapToken(
                 name = dto.name ?: ticker,
                 ticker = ticker,
                 chain = chain,
+                chainId = dto.chainId,
                 decimals = dto.decimals ?: 8,
                 logoUrl = dto.logoURI,
                 coingeckoId = dto.coingeckoId,

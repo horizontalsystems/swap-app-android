@@ -228,26 +228,46 @@ private fun SwapDetails(
 
     VSpacer(24.dp)
 
-    // Vertical status tracker
-    Column(modifier = Modifier.fillMaxWidth()) {
-        val statuses = SwapStatus.ordered
-        statuses.forEachIndexed { index, status ->
-            TrackerStep(
-                label = status.label,
-                state = stepState(status, uiState.status),
-                isLast = index == statuses.lastIndex,
-            )
-        }
+    // Link to the hosted page that follows this swap to completion. Replaces the in-app tracker
+    // below for now, since live status comes from the web page rather than a JSON status feed.
+    uiState.trackUrl?.let { trackUrl ->
+        val context = LocalContext.current
+        Text(
+            text = "🔍 Track this swap",
+            style = ComposeAppTheme.typography.headline2,
+            color = ComposeAppTheme.colors.jacob,
+            modifier = Modifier
+                .clickable {
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, trackUrl.toUri()))
+                    } catch (e: ActivityNotFoundException) {
+                        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .padding(8.dp),
+        )
+        VSpacer(8.dp)
     }
 
-    if (uiState.completed) {
-        VSpacer(24.dp)
-        ButtonPrimaryYellow(
-            modifier = Modifier.fillMaxWidth(),
-            title = "Done",
-            onClick = onDone,
-        )
-    }
+    // Vertical status tracker — commented out for now (we may return to in-app tracking later);
+    // tracking currently happens on the hosted page linked above.
+    // Column(modifier = Modifier.fillMaxWidth()) {
+    //     val statuses = SwapStatus.ordered
+    //     statuses.forEachIndexed { index, status ->
+    //         TrackerStep(
+    //             label = status.label,
+    //             state = stepState(status, uiState.status),
+    //             isLast = index == statuses.lastIndex,
+    //         )
+    //     }
+    // }
+
+    VSpacer(8.dp)
+    ButtonPrimaryYellow(
+        modifier = Modifier.fillMaxWidth(),
+        title = "Done",
+        onClick = onDone,
+    )
 }
 
 private enum class StepState { Done, Active, Pending }
