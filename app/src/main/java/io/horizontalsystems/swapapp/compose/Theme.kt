@@ -21,11 +21,8 @@ val lightPalette = Colors(
     tyler = Bright,
     leah = Dark,
     lawrence = White,
-    laguna = LagunaL,
-    raina = White50,
     andy = Steel,
     blade = Light,
-    ocean = BlueL,
 )
 
 val darkPalette = Colors(
@@ -35,11 +32,8 @@ val darkPalette = Colors(
     tyler = Black,
     leah = Bright,
     lawrence = Dark,
-    laguna = LagunaD,
-    raina = Color(0x1a6E7899),
     andy = Smoke,
     blade = Carbon,
-    ocean = BlueD,
 )
 
 @Composable
