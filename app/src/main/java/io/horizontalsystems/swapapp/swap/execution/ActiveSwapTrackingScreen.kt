@@ -1,6 +1,5 @@
 package io.horizontalsystems.swapapp.swap.execution
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -127,22 +126,16 @@ private fun SwapDetails(
     // QR encodes the BIP21 payment URI (address + exact amount) when available, so a wallet scan
     // pre-fills everything; otherwise the bare address.
     val qrContent = uiState.paymentUri ?: depositAddress
-    val qr = rememberQrBitmap(qrContent)
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(Color.White)
             .padding(12.dp)
     ) {
-        if (qr != null) {
-            Image(
-                bitmap = qr,
-                contentDescription = "Deposit payment QR",
-                modifier = Modifier.size(200.dp),
-            )
-        } else {
-            Box(Modifier.size(200.dp))
-        }
+        QrCode(
+            content = qrContent,
+            modifier = Modifier.size(200.dp),
+        )
     }
 
     VSpacer(16.dp)
