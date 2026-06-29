@@ -1,5 +1,6 @@
 package io.horizontalsystems.swapapp.swap
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,6 +74,12 @@ fun MainSwapScreen(
     val uiState = viewModel.uiState
     var selecting by remember { mutableStateOf<SelectTarget?>(null) }
     var showProviders by remember { mutableStateOf(false) }
+
+    // System back gesture/button closes an open overlay instead of falling through to the activity.
+    BackHandler(enabled = selecting != null || showProviders) {
+        selecting = null
+        showProviders = false
+    }
 
     when {
         selecting == SelectTarget.In -> SwapSelectCoinScreen(
