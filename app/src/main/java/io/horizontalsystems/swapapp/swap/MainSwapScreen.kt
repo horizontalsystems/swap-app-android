@@ -159,7 +159,7 @@ private fun SwapForm(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(
-                                text = uiState.amountOut?.stripTrailingZeros()?.toPlainString() ?: "0",
+                                text = formatCoinAmount(uiState.amountOut, uiState.tokenOut?.decimals ?: 8),
                                 style = ComposeAppTheme.typography.headline1,
                                 color = if (uiState.amountOut != null) ComposeAppTheme.colors.leah else ComposeAppTheme.colors.grey,
                                 maxLines = 1,
@@ -313,7 +313,9 @@ private fun PayAmount(
             onValueChange = { fiat ->
                 fiatAmount = fiat
                 val coin = if (fiat != null && priceIn != null && priceIn.signum() > 0) {
-                    fiat.divide(priceIn, decimals, RoundingMode.DOWN)
+                    // Don't push the token's full 18-decimal quotient into the field — keep only
+                    // the significant digits, matching how amounts are shown elsewhere in the app.
+                    roundCoinAmount(fiat.divide(priceIn, decimals, RoundingMode.DOWN), decimals)
                 } else {
                     null
                 }
