@@ -82,27 +82,6 @@ fun BadgeText(
 }
 
 @Composable
-fun BadgeOrangeGradient(
-    modifier: Modifier = Modifier,
-    text: String,
-) {
-    val gradientColors = listOf(Color(0xFFFFAA00), Color(0xFFFE4A11))
-    BadgeBase(
-        modifier = modifier,
-        background = Brush.horizontalGradient(gradientColors),
-    ) {
-        Text(
-            text = text,
-            color = Dark,
-            style = ComposeAppTheme.typography.microSB,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-
-@Composable
 fun BadgeBase(
     modifier: Modifier = Modifier,
     background: Brush,

@@ -9,27 +9,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 
 @Composable
-fun headline1_leah(
-    text: String,
-    modifier: Modifier = Modifier,
-    textAlign: TextAlign? = null,
-    overflow: TextOverflow = TextOverflow.Clip,
-    maxLines: Int = Int.MAX_VALUE,
-    onTextLayout: (TextLayoutResult) -> Unit = {}
-) {
-    Text(
-        text = text,
-        modifier = modifier,
-        textAlign = textAlign,
-        overflow = overflow,
-        maxLines = maxLines,
-        onTextLayout = onTextLayout,
-        style = ComposeAppTheme.typography.headline1,
-        color = ComposeAppTheme.colors.leah,
-    )
-}
-
-@Composable
 fun body_leah(
     text: String,
     modifier: Modifier = Modifier,
