@@ -144,7 +144,9 @@ class SwapQuoteService(
         val tmp = tokenIn
         tokenIn = tokenOut
         tokenOut = tmp
-        amountIn = quote?.amountOut
+        // Carry the quote's output over as the new input, smart-rounded to the new input token's
+        // decimals — otherwise the raw full-precision amountOut shows as an over-long number.
+        amountIn = quote?.amountOut?.let { roundCoinAmount(it, tokenIn?.decimals ?: 8) }
         runQuotation()
     }
 
