@@ -2,6 +2,7 @@ package io.horizontalsystems.swapapp.swap.api
 
 import com.google.gson.annotations.SerializedName
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
 
 /**
@@ -17,6 +18,10 @@ import retrofit2.http.POST
  */
 interface MemolessApi {
 
+    /** Assets the memoless service can register (only ~15 native coins; ERC-20s are excluded). */
+    @GET("assets")
+    suspend fun assets(): MemolessAssetsResponse
+
     /** Register a THORChain [MemolessRegisterRequest.memo] → reference + amount to actually send. */
     @POST("register")
     suspend fun register(@Body body: MemolessRegisterRequest): MemolessRegisterResponse
@@ -25,6 +30,17 @@ interface MemolessApi {
     @POST("preflight")
     suspend fun preflight(@Body body: MemolessPreflightRequest): MemolessPreflightResponse
 }
+
+data class MemolessAssetsResponse(
+    val success: Boolean? = null,
+    val assets: List<MemolessAssetDto>? = null,
+)
+
+data class MemolessAssetDto(
+    val asset: String? = null,
+    /** e.g. "Available"; only these are usable for memoless registration. */
+    val status: String? = null,
+)
 
 data class MemolessRegisterRequest(
     val asset: String,

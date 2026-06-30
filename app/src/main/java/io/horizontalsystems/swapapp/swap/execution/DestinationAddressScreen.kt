@@ -1,6 +1,7 @@
 package io.horizontalsystems.swapapp.swap.execution
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +22,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.horizontalsystems.swapapp.swap.SwapToken
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
+import io.horizontalsystems.swapapp.compose.components.HsDivider
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 
 /**
@@ -43,6 +47,9 @@ fun AddressInputScreen(
     onConfirm: (address: String) -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val history = remember { AddressHistoryStore(context) }
+    val recentAddresses = remember(token) { history.recent(token.identifier) }
     var address by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -125,6 +132,41 @@ fun AddressInputScreen(
                 )
             }
 
+            // Previously used addresses for this token — tap to reuse.
+            if (recentAddresses.isNotEmpty()) {
+                VSpacer(24.dp)
+                Text(
+                    text = "Recently used",
+                    style = ComposeAppTheme.typography.subheadSB,
+                    color = ComposeAppTheme.colors.grey,
+                )
+                VSpacer(8.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, ComposeAppTheme.colors.blade, RoundedCornerShape(16.dp))
+                ) {
+                    recentAddresses.forEachIndexed { index, recent ->
+                        if (index > 0) HsDivider()
+                        Text(
+                            text = shortenAddress(recent),
+                            style = ComposeAppTheme.typography.subhead,
+                            color = ComposeAppTheme.colors.leah,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    address = recent
+                                    error = null
+                                }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                        )
+                    }
+                }
+            }
+
             VSpacer(24.dp)
 
             ButtonPrimaryYellow(
@@ -134,7 +176,9 @@ fun AddressInputScreen(
                 onClick = {
                     val validationError = SwapAddressValidator.validate(address, token)
                     if (validationError == null) {
-                        onConfirm(address.trim())
+                        val confirmed = address.trim()
+                        history.add(token.identifier, confirmed)
+                        onConfirm(confirmed)
                     } else {
                         error = validationError
                     }
@@ -143,3 +187,7 @@ fun AddressInputScreen(
         }
     }
 }
+
+/** Middle-truncates a long address (e.g. "0x1234abcd…9f8e7d6c") so suggestions stay distinguishable. */
+private fun shortenAddress(address: String): String =
+    if (address.length <= 20) address else address.take(10) + "…" + address.takeLast(8)

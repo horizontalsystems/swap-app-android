@@ -545,7 +545,7 @@ private fun StatusText(uiState: MainSwapUiState) {
         uiState.error != null -> errorMessage(uiState.error) to ComposeAppTheme.colors.lucian
         uiState.tokenIn == null || uiState.tokenOut == null -> "Select tokens to swap" to ComposeAppTheme.colors.grey
         uiState.amountIn == null -> "Enter an amount" to ComposeAppTheme.colors.grey
-        uiState.quote != null -> "via ${uiState.quote.provider.title}" to ComposeAppTheme.colors.grey
+        // No "via {provider}" line once a quote exists — the provider cell below already shows it.
         else -> "" to ComposeAppTheme.colors.grey
     }
     if (text.isNotEmpty()) {

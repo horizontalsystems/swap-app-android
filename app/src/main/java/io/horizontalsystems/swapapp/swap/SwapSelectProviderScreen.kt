@@ -16,11 +16,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.components.cell.CellMiddleInfo
 import io.horizontalsystems.swapapp.components.cell.CellPrimary
@@ -42,10 +46,10 @@ fun SwapSelectProviderScreen(
     onSelectQuote: (SwapProviderQuote) -> Unit,
     onClose: () -> Unit,
 ) {
-    val viewModel = viewModel<SwapSelectProviderViewModel>(
-        factory = SwapSelectProviderViewModel.Factory(quotes, selectedQuote)
-    )
-    val uiState = viewModel.uiState
+    var sortType by rememberSaveable { mutableStateOf(ProviderSortType.BestPrice) }
+    // Recomputed from the quotes passed in on every open, so the list always reflects the current
+    // quote set — no retained ViewModel snapshot that could go stale vs the swap screen.
+    val items = remember(quotes, sortType) { providerQuoteViewItems(quotes, sortType) }
 
     HSScaffold(title = "Providers", onBack = onClose) {
         Column(
@@ -54,8 +58,8 @@ fun SwapSelectProviderScreen(
                 .background(ComposeAppTheme.colors.lawrence)
         ) {
             SortSelector(
-                selected = uiState.sortType,
-                onSelect = viewModel::setSortType,
+                selected = sortType,
+                onSelect = { sortType = it },
             )
             HsDivider()
 
@@ -64,8 +68,8 @@ fun SwapSelectProviderScreen(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
             ) {
-                uiState.quoteViewItems.forEach { item ->
-                    val isSelected = item.quote.provider.id == uiState.selectedQuote?.provider?.id
+                items.forEach { item ->
+                    val isSelected = item.quote.provider.id == selectedQuote?.provider?.id
                     ProviderRow(
                         item = item,
                         isSelected = isSelected,

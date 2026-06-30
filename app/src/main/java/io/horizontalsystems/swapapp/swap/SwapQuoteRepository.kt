@@ -1,5 +1,6 @@
 package io.horizontalsystems.swapapp.swap
 
+import android.util.Log
 import io.horizontalsystems.swapapp.swap.api.QuoteRequestDto
 import io.horizontalsystems.swapapp.swap.api.RouteDto
 import io.horizontalsystems.swapapp.swap.api.SwapApiClient
@@ -14,6 +15,7 @@ import java.math.BigDecimal
  */
 class SwapQuoteRepository(
     private val api: io.horizontalsystems.swapapp.swap.api.SwapApi = SwapApiClient.api,
+    private val memolessAssets: MemolessAssetRepository = MemolessAssetRepository(),
 ) {
     /** Providers that can route both tokens (the API rejects unsupported ones). */
     fun supportedProviders(tokenIn: SwapToken, tokenOut: SwapToken): List<String> =
@@ -29,13 +31,19 @@ class SwapQuoteRepository(
         amountIn: BigDecimal,
         providers: List<String>,
     ): List<SwapProviderQuote> = withContext(Dispatchers.IO) {
+        // The app supports memoless swaps only — deposits the user can pay without manually
+        // attaching a memo. Drop providers that can't comply (see [applyMemolessPolicy]) up front,
+        // so they're never shown and we never make a doomed memoless register call.
+        val effectiveProviders = applyMemolessPolicy(providers, tokenIn, tokenOut)
+        if (effectiveProviders.isEmpty()) return@withContext emptyList()
+
         val response = try {
             api.quote(
                 QuoteRequestDto(
                     sellAsset = tokenIn.identifier,
                     buyAsset = tokenOut.identifier,
                     sellAmount = amountIn.stripTrailingZeros().toPlainString(),
-                    providers = providers,
+                    providers = effectiveProviders,
                     dry = true,
                 )
             )
@@ -63,6 +71,11 @@ class SwapQuoteRepository(
         destinationAddress: String,
         refundAddress: String? = null,
     ): SwapDeposit = withContext(Dispatchers.IO) {
+        Log.d(
+            TAG,
+            "register request: provider=$providerId ${tokenIn.identifier} -> ${tokenOut.identifier} " +
+                "amount=${amountIn.stripTrailingZeros().toPlainString()} refundAddress=${refundAddress != null}"
+        )
         val response = try {
             api.quote(
                 QuoteRequestDto(
@@ -77,11 +90,27 @@ class SwapQuoteRepository(
             )
         } catch (e: HttpException) {
             // 404 / 400 here usually means the provider couldn't register this swap (e.g. a CEX
-            // that requires a refund address). Surface a clean "no route" rather than a raw HTTP code.
+            // that requires a refund address). Log the server's actual reason (BASIC OkHttp logging
+            // hides the body) before surfacing a clean "no route".
+            val errorBody = e.response()?.errorBody()?.string()
+            Log.e(
+                TAG,
+                "register failed: provider=$providerId ${tokenIn.identifier} -> ${tokenOut.identifier} " +
+                    "http=${e.code()} body=$errorBody"
+            )
             if (e.code() == 404 || e.code() == 400) throw SwapRouteNotFound() else throw e
         }
 
-        val route = response.routes.orEmpty().firstOrNull() ?: throw SwapRouteNotFound()
+        val route = response.routes.orEmpty().firstOrNull() ?: run {
+            Log.w(TAG, "register returned no route: provider=$providerId ${tokenIn.identifier} -> ${tokenOut.identifier}")
+            throw SwapRouteNotFound()
+        }
+        Log.d(
+            TAG,
+            "register OK: provider=$providerId inbound=${!route.inboundAddress.isNullOrBlank()} " +
+                "target=${!route.targetAddress.isNullOrBlank()} memo=${!route.memo.isNullOrBlank()} " +
+                "qrCodeStr=${!route.qrCodeStr.isNullOrBlank()} providerSwapId=${route.providerSwapId}"
+        )
         val address = route.inboundAddress?.takeIf { it.isNotBlank() }
             ?: route.targetAddress?.takeIf { it.isNotBlank() }
             ?: throw SwapRouteNotFound()
@@ -99,6 +128,36 @@ class SwapQuoteRepository(
             providerSwapId = route.providerSwapId,
             secondsRemaining = expiresIn,
         )
+    }
+
+    /**
+     * Keep only providers that can deliver a memoless deposit for this pair:
+     *  - **Non-memo providers** (CEX / intents like NEAR) hand the user a payment URI directly → kept.
+     *  - **THORChain** is memo-based, but the memoless service folds its memo into the send amount —
+     *    kept only when both sides of the pair are in the live memoless asset list. (Kept defensively
+     *    if that list can't be fetched; the deposit step still has a memo fallback.)
+     *  - **MayaChain** (and any other on-chain memo DEX, incl. THORChain streaming) has no memoless
+     *    path — the memoless service is THORChain-only — so it's dropped.
+     */
+    private suspend fun applyMemolessPolicy(
+        providers: List<String>,
+        tokenIn: SwapToken,
+        tokenOut: SwapToken,
+    ): List<String> {
+        if (providers.none { SwapProvider(it).requiresMemoDeposit }) return providers
+
+        val supported = memolessAssets.supportedAssets()
+        val thorchainMemoless = supported == null ||
+            (tokenIn.identifier.uppercase() in supported && tokenOut.identifier.uppercase() in supported)
+
+        return providers.filter { id ->
+            val provider = SwapProvider(id)
+            when {
+                !provider.requiresMemoDeposit -> true
+                provider.id.equals("THORCHAIN", ignoreCase = true) -> thorchainMemoless
+                else -> false
+            }
+        }
     }
 
     private fun RouteDto.toProviderQuote(
@@ -130,6 +189,10 @@ class SwapQuoteRepository(
         val amount = fee.amount?.toBigDecimalOrNull() ?: return null
         val ticker = fee.asset?.substringAfterLast('.')?.substringBefore('-') ?: ""
         return SwapFee(amount, ticker)
+    }
+
+    companion object {
+        private const val TAG = "SwapProviders"
     }
 }
 

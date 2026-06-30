@@ -57,10 +57,20 @@ data class SwapProvider(val id: String) {
      * MayaChain) auto-return funds to the sender, so they don't. Mirrors the swap-bot.
      */
     val requiresRefundAddress: Boolean
-        get() = id.uppercase() !in NO_REFUND_PROVIDERS
+        get() = id.uppercase() !in ON_CHAIN_DEX_PROVIDERS
+
+    /**
+     * On-chain DEX providers whose deposit carries a memo (THORChain & MayaChain families). These
+     * are only "memoless" if a separate service can fold the memo into the send amount — which the
+     * Unstoppable memoless service does for THORChain only.
+     */
+    val requiresMemoDeposit: Boolean
+        get() = id.uppercase() in ON_CHAIN_DEX_PROVIDERS
 
     companion object {
-        private val NO_REFUND_PROVIDERS = setOf(
+        // On-chain memo DEXes: they auto-refund to the sender (so need no refund address) and their
+        // deposit carries a memo.
+        private val ON_CHAIN_DEX_PROVIDERS = setOf(
             "THORCHAIN", "THORCHAIN_STREAMING",
             "MAYACHAIN", "MAYACHAIN_STREAMING",
         )
