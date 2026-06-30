@@ -14,10 +14,10 @@ import java.math.BigDecimal
 /**
  * Drives the swap execution flow once the user has confirmed a destination address:
  *
- *   1. Register the swap via the chosen [provider] → real deposit address + exact input amount
- *      (+ memo for THORChain), through [SwapDepositRepository.createIntent].
- *   2. Poll the backend for status and advance the tracker through the [SwapStatus] stages
- *      ([SwapDepositRepository.statusUpdates] — still mocked).
+ *   1. Commit the swap via the chosen [provider] → real deposit address + exact input amount
+ *      (+ attachment for chains that need a tag/memo), through [SwapDepositRepository.createIntent].
+ *   2. Poll `POST /v2/track` for live status and advance the tracker through the [SwapStatus] stages
+ *      ([SwapDepositRepository.statusUpdates]).
  */
 class SwapExecutionViewModel(
     private val tokenIn: SwapToken,
@@ -34,16 +34,17 @@ class SwapExecutionViewModel(
             creatingIntent = true,
             error = null,
             depositAddress = null,
-            memo = null,
+            attachmentValue = null,
+            attachmentLabel = null,
             paymentUri = null,
             deeplink = null,
-            trackUrl = null,
             amountIn = amountIn,
             tokenInCode = tokenIn.ticker,
             tokenOutCode = tokenOut.ticker,
             providerTitle = provider.title,
             destinationAddress = destinationAddress,
-            status = SwapStatus.AwaitingDeposit,
+            status = SwapStatus.NotStarted,
+            pauseReason = null,
         )
     )
         private set
@@ -72,16 +73,16 @@ class SwapExecutionViewModel(
                 uiState = uiState.copy(
                     creatingIntent = false,
                     depositAddress = intent.depositAddress,
-                    memo = intent.memo,
+                    attachmentValue = intent.attachmentValue,
+                    attachmentLabel = intent.attachmentLabel,
                     paymentUri = intent.paymentUri,
                     deeplink = intent.deeplink,
-                    trackUrl = intent.trackUrl,
                     amountIn = intent.amountIn,
                 )
 
-                // Poll for status and walk the tracker forward.
-                repository.statusUpdates(intent.reference).collect { status ->
-                    uiState = uiState.copy(status = status)
+                // Poll for live status and walk the tracker forward.
+                repository.statusUpdates(intent.uuid).collect { update ->
+                    uiState = uiState.copy(status = update.status, pauseReason = update.pauseReason)
                 }
             } catch (e: Throwable) {
                 uiState = uiState.copy(
@@ -119,16 +120,21 @@ data class ActiveSwapUiState(
     val creatingIntent: Boolean,
     val error: String?,
     val depositAddress: String?,
-    val memo: String?,
+    /** Destination tag / memo that must accompany the send (chains like XRP, RUNE). */
+    val attachmentValue: String?,
+    val attachmentLabel: String?,
     val paymentUri: String?,
     val deeplink: String?,
-    val trackUrl: String?,
     val amountIn: BigDecimal,
     val tokenInCode: String,
     val tokenOutCode: String,
     val providerTitle: String,
     val destinationAddress: String,
     val status: SwapStatus,
+    val pauseReason: String?,
 ) {
     val completed: Boolean get() = status == SwapStatus.Completed
+
+    /** Terminal failure — funds refunded or the swap failed outright. */
+    val failed: Boolean get() = status == SwapStatus.Refunded || status == SwapStatus.Failed
 }

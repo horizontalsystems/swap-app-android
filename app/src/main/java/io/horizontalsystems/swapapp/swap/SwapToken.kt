@@ -3,9 +3,9 @@ package io.horizontalsystems.swapapp.swap
 import io.horizontalsystems.swapapp.swap.api.SwapTokenDto
 
 /**
- * A swappable token, sourced from the swap API's `GET /tokens/all`. [identifier] (e.g. "BTC.BTC",
- * "ETH.USDT-0x…") is the key the `/quote` endpoint uses, so this is the single token model across
- * the swap feature (replacing the earlier MarketKit-based one).
+ * A swappable token, unioned from each transfer provider's `GET /tokens?provider=`. [identifier]
+ * (e.g. "BTC.BTC", "ETH.USDT-0x…") is the key the `/rate` & `/swap` endpoints use, so this is the
+ * single token model across the swap feature. [providers] is assigned by [SwapTokenRepository].
  */
 data class SwapToken(
     val identifier: String,
@@ -22,13 +22,16 @@ data class SwapToken(
     /**
      * True for a chain's native coin (e.g. `BTC.BTC`, `ETH.ETH`). Native tokens have no contract
      * address, so their [identifier] is just `CHAIN.TICKER` with no `-ADDRESS` suffix — verified to
-     * match `address == null` across the whole `/tokens/all` universe.
+     * match `address == null` across the whole token universe.
      */
     val isNative: Boolean get() = !identifier.contains("-")
 
     companion object {
-        /** Maps a DTO to a token, or null if it lacks the fields we need (so it's skipped). */
-        fun fromDto(dto: SwapTokenDto): SwapToken? {
+        /**
+         * Maps a DTO to a token, or null if it lacks the fields we need (so it's skipped). v2 token
+         * objects carry no providers — [SwapTokenRepository] supplies the supporting [providers].
+         */
+        fun fromDto(dto: SwapTokenDto, providers: List<String>): SwapToken? {
             val identifier = dto.identifier ?: return null
             val ticker = dto.ticker ?: return null
             val chain = dto.chain ?: return null
@@ -41,7 +44,7 @@ data class SwapToken(
                 decimals = dto.decimals ?: 8,
                 logoUrl = dto.logoURI,
                 coingeckoId = dto.coingeckoId,
-                providers = dto.providers ?: emptyList(),
+                providers = providers,
             )
         }
     }
@@ -52,29 +55,14 @@ data class SwapProvider(val id: String) {
     val title: String get() = TITLES[id] ?: id.lowercase().replaceFirstChar { it.uppercase() }
 
     /**
-     * Whether a non-dry `/quote` needs a refund address. CEX providers reject the request without
-     * one ("Refund address is required if dry is false"); on-chain DEX providers (THORChain,
-     * MayaChain) auto-return funds to the sender, so they don't. Mirrors the swap-bot.
+     * Whether `POST /swap` needs a refund address. The app offers only `transfer` (P2P / NEAR)
+     * providers, which reject a swap without one ("Refund address … is not valid"), so this is true
+     * for every provider we surface. Drives the extra refund-address step in `MainActivity`.
      */
     val requiresRefundAddress: Boolean
-        get() = id.uppercase() !in ON_CHAIN_DEX_PROVIDERS
-
-    /**
-     * On-chain DEX providers whose deposit carries a memo (THORChain & MayaChain families). These
-     * are only "memoless" if a separate service can fold the memo into the send amount — which the
-     * Unstoppable memoless service does for THORChain only.
-     */
-    val requiresMemoDeposit: Boolean
-        get() = id.uppercase() in ON_CHAIN_DEX_PROVIDERS
+        get() = true
 
     companion object {
-        // On-chain memo DEXes: they auto-refund to the sender (so need no refund address) and their
-        // deposit carries a memo.
-        private val ON_CHAIN_DEX_PROVIDERS = setOf(
-            "THORCHAIN", "THORCHAIN_STREAMING",
-            "MAYACHAIN", "MAYACHAIN_STREAMING",
-        )
-
         private val TITLES = mapOf(
             "THORCHAIN" to "THORChain",
             "MAYACHAIN" to "MayaChain",

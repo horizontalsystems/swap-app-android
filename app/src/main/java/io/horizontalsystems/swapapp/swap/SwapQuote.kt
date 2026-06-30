@@ -3,8 +3,8 @@ package io.horizontalsystems.swapapp.swap
 import java.math.BigDecimal
 
 /**
- * A single provider's route, mapped from the swap API's `/quote` response. [inboundAddress] /
- * [providerSwapId] come back populated on a non-dry quote and feed the deposit/tracking step.
+ * A single provider's route, mapped from the swap API's `POST /rate` response. Pricing only — the
+ * deposit address + tracking handle (`uuid`) come later from `POST /swap`.
  */
 data class SwapQuote(
     val amountOut: BigDecimal,
@@ -13,8 +13,6 @@ data class SwapQuote(
     val amountIn: BigDecimal,
     val estimationTime: Long? = null,
     val fee: SwapFee? = null,
-    val inboundAddress: String? = null,
-    val providerSwapId: String? = null,
 )
 
 /** A fee from the quote, expressed as an amount in a named asset (e.g. 0.037 in "ETH"). */

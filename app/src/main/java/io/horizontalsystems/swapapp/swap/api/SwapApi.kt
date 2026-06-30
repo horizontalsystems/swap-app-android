@@ -3,18 +3,34 @@ package io.horizontalsystems.swapapp.swap.api
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Query
 
 /**
- * Unstoppable swap aggregator API. The base URL and `x-api-key` are injected by [SwapApiClient]
- * from BuildConfig (sourced from local.properties).
+ * USwap aggregator `/v2` API. The base URL and `X-API-Key` are injected by [SwapApiClient] from
+ * BuildConfig (sourced from local.properties).
+ *
+ * The app is accountless — it can only relay deposit details to the user, never sign or build a
+ * transaction — so it offers only providers whose `executionType` is `transfer` (see [providers]).
  */
 interface SwapApi {
 
-    /** Full supported token list, each carrying the providers that route it. */
-    @GET("tokens/all")
-    suspend fun tokens(): List<SwapTokenDto>
+    /** All providers with their `executionType`, suspension state and supported chains. */
+    @GET("providers")
+    suspend fun providers(): List<ProviderDto>
 
-    /** Compare routes across providers. Use `dry = true` for display-only quotes. */
-    @POST("quote")
-    suspend fun quote(@Body body: QuoteRequestDto): QuoteResponseDto
+    /** One provider's supported token list. v2 has no global list, so callers union per provider. */
+    @GET("tokens")
+    suspend fun tokens(@Query("provider") provider: String): ProviderTokensDto
+
+    /** Compare routes across providers (read-only pricing; no order created). */
+    @POST("rate")
+    suspend fun rate(@Body body: RateRequestDto): RateResponseDto
+
+    /** Commit a swap with one provider. Returns the executable route directly (no wrapper). */
+    @POST("swap")
+    suspend fun swap(@Body body: SwapRequestDto): RouteDto
+
+    /** Poll a committed swap's live status by its route `uuid`. */
+    @POST("track")
+    suspend fun track(@Body body: TrackRequestDto): TrackResponseDto
 }

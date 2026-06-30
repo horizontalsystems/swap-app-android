@@ -2,7 +2,6 @@ package io.horizontalsystems.swapapp.swap.execution
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,7 +39,7 @@ import java.math.BigDecimal
 
 /**
  * Shows the generated deposit details (QR + address + exact amount) and a vertical tracker that
- * follows the swap through its stages as [SwapExecutionViewModel] polls the backend.
+ * follows the swap through its stages as [SwapExecutionViewModel] polls `POST /v2/track`.
  */
 @Composable
 fun ActiveSwapTrackingScreen(
@@ -86,7 +85,7 @@ fun ActiveSwapTrackingScreen(
                 else -> SwapDetails(
                     uiState = uiState,
                     onCopyAddress = { uiState.depositAddress?.let { clipboard.setText(AnnotatedString(it)) } },
-                    onCopyMemo = { uiState.memo?.let { clipboard.setText(AnnotatedString(it)) } },
+                    onCopyAttachment = { uiState.attachmentValue?.let { clipboard.setText(AnnotatedString(it)) } },
                     onDone = onDone,
                 )
             }
@@ -98,7 +97,7 @@ fun ActiveSwapTrackingScreen(
 private fun SwapDetails(
     uiState: ActiveSwapUiState,
     onCopyAddress: () -> Unit,
-    onCopyMemo: () -> Unit,
+    onCopyAttachment: () -> Unit,
     onDone: () -> Unit,
 ) {
     val depositAddress = uiState.depositAddress ?: return
@@ -187,20 +186,21 @@ private fun SwapDetails(
         )
     }
 
-    // Memo — required for THORChain deposits; the send will be lost without it.
-    uiState.memo?.let { memo ->
+    // Attachment (destination tag / memo) — required for some chains; the send is lost without it.
+    uiState.attachmentValue?.let { attachment ->
+        val label = uiState.attachmentLabel ?: "Memo"
         VSpacer(12.dp)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(ComposeAppTheme.colors.lawrence)
-                .clickable(onClick = onCopyMemo)
+                .clickable(onClick = onCopyAttachment)
                 .padding(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Memo — required",
+                    text = "$label — required",
                     style = ComposeAppTheme.typography.subhead,
                     color = ComposeAppTheme.colors.lucian,
                     modifier = Modifier.weight(1f),
@@ -213,13 +213,13 @@ private fun SwapDetails(
             }
             VSpacer(4.dp)
             Text(
-                text = memo,
+                text = attachment,
                 style = ComposeAppTheme.typography.subhead,
                 color = ComposeAppTheme.colors.leah,
             )
             VSpacer(4.dp)
             Text(
-                text = "You must include this memo in the transaction or the funds will be lost.",
+                text = "You must include this ${label.lowercase()} in the transaction or the funds will be lost.",
                 style = ComposeAppTheme.typography.caption,
                 color = ComposeAppTheme.colors.grey,
             )
@@ -228,41 +228,47 @@ private fun SwapDetails(
 
     VSpacer(24.dp)
 
-    // Link to the hosted page that follows this swap to completion. Replaces the in-app tracker
-    // below for now, since live status comes from the web page rather than a JSON status feed.
-    uiState.trackUrl?.let { trackUrl ->
-        val context = LocalContext.current
-        Text(
-            text = "🔍 Track this swap",
-            style = ComposeAppTheme.typography.headline2,
-            color = ComposeAppTheme.colors.jacob,
-            modifier = Modifier
-                .clickable {
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, trackUrl.toUri()))
-                    } catch (e: ActivityNotFoundException) {
-                        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
-                    }
+    // Live status.
+    when {
+        uiState.failed -> {
+            Text(
+                text = if (uiState.status == SwapStatus.Refunded) {
+                    "Swap failed — your funds were refunded."
+                } else {
+                    "Swap failed."
+                },
+                style = ComposeAppTheme.typography.headline2,
+                color = ComposeAppTheme.colors.lucian,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        else -> {
+            // Vertical status tracker, driven by the live POST /v2/track status.
+            Column(modifier = Modifier.fillMaxWidth()) {
+                val stages = SwapStatus.stages
+                stages.forEachIndexed { index, stage ->
+                    TrackerStep(
+                        label = stage.label,
+                        state = stepState(index, uiState.status),
+                        isLast = index == stages.lastIndex,
+                    )
                 }
-                .padding(8.dp),
-        )
-        VSpacer(8.dp)
+            }
+
+            if (uiState.status == SwapStatus.ActionRequired) {
+                VSpacer(12.dp)
+                Text(
+                    text = actionRequiredMessage(uiState.pauseReason),
+                    style = ComposeAppTheme.typography.subhead,
+                    color = ComposeAppTheme.colors.lucian,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 
-    // Vertical status tracker — commented out for now (we may return to in-app tracking later);
-    // tracking currently happens on the hosted page linked above.
-    // Column(modifier = Modifier.fillMaxWidth()) {
-    //     val statuses = SwapStatus.ordered
-    //     statuses.forEachIndexed { index, status ->
-    //         TrackerStep(
-    //             label = status.label,
-    //             state = stepState(status, uiState.status),
-    //             isLast = index == statuses.lastIndex,
-    //         )
-    //     }
-    // }
-
-    VSpacer(8.dp)
+    VSpacer(24.dp)
     ButtonPrimaryYellow(
         modifier = Modifier.fillMaxWidth(),
         title = "Done",
@@ -272,11 +278,28 @@ private fun SwapDetails(
 
 private enum class StepState { Done, Active, Pending }
 
-private fun stepState(step: SwapStatus, current: SwapStatus): StepState = when {
-    step.order < current.order -> StepState.Done
-    step.order > current.order -> StepState.Pending
-    current == SwapStatus.Completed -> StepState.Done // last stage reached
-    else -> StepState.Active
+/** Step [index] state given the current [status]'s position in [SwapStatus.stages]. */
+private fun stepState(index: Int, status: SwapStatus): StepState {
+    val current = status.stageIndex
+    return when {
+        index < current -> StepState.Done
+        index > current -> StepState.Pending
+        status == SwapStatus.Completed -> StepState.Done // last stage reached
+        else -> StepState.Active
+    }
+}
+
+private fun actionRequiredMessage(pauseReason: String?): String {
+    val detail = when (pauseReason?.lowercase()) {
+        "aml" -> "An AML check blocked the deposit."
+        "kyc_required" -> "The provider requires KYC before withdrawal."
+        "frozen" -> "The provider froze the order pending review."
+        "overdue_with_funds" -> "The order window was missed after the deposit arrived."
+        "provider_error" -> "The provider reported an error after the deposit."
+        "manual_review" -> "The provider needs to review this order."
+        else -> "The swap is paused and needs attention."
+    }
+    return "$detail Please contact the provider to resolve it."
 }
 
 @Composable

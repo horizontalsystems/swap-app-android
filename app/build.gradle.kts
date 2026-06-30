@@ -29,7 +29,7 @@ android {
         buildConfigField(
             "String",
             "SWAP_API_BASE_URL",
-            "\"${localProps.getProperty("SWAP_API_BASE_URL", "https://swap-dev.unstoppable.money/api/v1/")}\""
+            "\"${localProps.getProperty("SWAP_API_BASE_URL", "https://swap-dev.unstoppable.money/api/v2/")}\""
         )
         buildConfigField(
             "String",

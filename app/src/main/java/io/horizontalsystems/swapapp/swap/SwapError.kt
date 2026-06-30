@@ -5,3 +5,6 @@ class NoSupportedSwapProvider : Throwable("No swap provider supports this token 
 
 /** Providers were asked for a quote but none returned a route. */
 class SwapRouteNotFound : Throwable("No swap route found")
+
+/** `POST /swap` failed with a provider error; [message] is the server's reason for the user. */
+class SwapProviderError(message: String) : Throwable(message)
