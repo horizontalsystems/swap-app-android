@@ -38,11 +38,26 @@ android {
         )
     }
 
+    // Release signing, configured from local.properties (not version controlled). The config is
+    // only registered when the keystore is present, so debug builds / CI without it still work.
+    val releaseStoreFile = localProps.getProperty("RELEASE_STORE_FILE")?.let { rootProject.file(it) }
+    signingConfigs {
+        if (releaseStoreFile?.exists() == true) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = localProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = localProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             optimization {
                 enable = false
             }
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {

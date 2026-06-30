@@ -10,5 +10,9 @@ local.properties
 .cxx/
 captures/
 
+# Signing (keystores are local-only; never commit)
+*.jks
+*.keystore
+
 # OS
 .DS_Store
