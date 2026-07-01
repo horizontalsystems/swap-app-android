@@ -45,7 +45,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
+import io.horizontalsystems.swapapp.compose.TranslatableString
 import io.horizontalsystems.swapapp.compose.components.Badge
+import io.horizontalsystems.swapapp.compose.components.MenuItem
 import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
 import io.horizontalsystems.swapapp.compose.components.CoinImage
 import io.horizontalsystems.swapapp.compose.components.HSpacer
@@ -53,7 +55,6 @@ import io.horizontalsystems.swapapp.compose.components.HsDivider
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.text.DecimalFormat
 
 private enum class SelectTarget { In, Out }
 
@@ -68,7 +69,16 @@ private enum class SelectTarget { In, Out }
 @Composable
 fun MainSwapScreen(
     onClose: () -> Unit,
-    onProceed: (amountIn: BigDecimal, tokenIn: SwapToken, tokenOut: SwapToken, selectedProvider: SwapProvider) -> Unit,
+    onOpenHistory: () -> Unit,
+    onProceed: (
+        amountIn: BigDecimal,
+        tokenIn: SwapToken,
+        tokenOut: SwapToken,
+        selectedProvider: SwapProvider,
+        amountOut: BigDecimal?,
+        fiatIn: BigDecimal?,
+        fiatOut: BigDecimal?,
+    ) -> Unit,
 ) {
     val viewModel = viewModel<MainSwapViewModel>()
     val uiState = viewModel.uiState
@@ -115,6 +125,7 @@ fun MainSwapScreen(
         else -> SwapForm(
             uiState = uiState,
             onClose = onClose,
+            onOpenHistory = onOpenHistory,
             onEnterAmount = viewModel::onEnterAmount,
             onSwitchPairs = viewModel::onSwitchPairs,
             onClickTokenIn = { selecting = SelectTarget.In },
@@ -123,7 +134,10 @@ fun MainSwapScreen(
             onClickNext = {
                 val s = uiState
                 if (s.canProceed) {
-                    onProceed(s.amountIn!!, s.tokenIn!!, s.tokenOut!!, s.selectedProvider!!)
+                    onProceed(
+                        s.amountIn!!, s.tokenIn!!, s.tokenOut!!, s.selectedProvider!!,
+                        s.amountOut, s.fiatIn, s.fiatOut,
+                    )
                 }
             },
         )
@@ -134,6 +148,7 @@ fun MainSwapScreen(
 private fun SwapForm(
     uiState: MainSwapUiState,
     onClose: () -> Unit,
+    onOpenHistory: () -> Unit,
     onEnterAmount: (BigDecimal?) -> Unit,
     onSwitchPairs: () -> Unit,
     onClickTokenIn: () -> Unit,
@@ -141,7 +156,17 @@ private fun SwapForm(
     onClickProviders: () -> Unit,
     onClickNext: () -> Unit,
 ) {
-    HSScaffold(title = "Swap") {
+    HSScaffold(
+        title = "Swap",
+        menuItems = listOf(
+            MenuItem(
+                title = TranslatableString.PlainString("Swap History"),
+                icon = R.drawable.clock_24,
+                tint = ComposeAppTheme.colors.grey,
+                onClick = onOpenHistory,
+            ),
+        ),
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Two token rows separated by a divider, with the switch button centered on it.
             Box(contentAlignment = Alignment.Center) {
@@ -455,18 +480,6 @@ private fun FiatAmountInput(
         cursorBrush = SolidColor(ComposeAppTheme.colors.leah),
         visualTransformation = displayTransformation,
     )
-}
-
-/** USD value formatting matching swap-bot: no decimals ≥ $1,000, two decimals ≥ $1, else compact. */
-private fun formatFiat(value: BigDecimal): String {
-    val abs = value.abs()
-    val format = when {
-        abs.signum() == 0 -> return "$0"
-        abs >= BigDecimal(1000) -> DecimalFormat("#,##0")
-        abs >= BigDecimal.ONE -> DecimalFormat("#,##0.00")
-        else -> DecimalFormat("0.####")
-    }
-    return "$" + format.format(value)
 }
 
 /** Circular switch button, with a background-coloured ring so it cleanly straddles the divider. */

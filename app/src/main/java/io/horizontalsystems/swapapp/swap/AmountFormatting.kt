@@ -2,6 +2,7 @@ package io.horizontalsystems.swapapp.swap
 
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.text.DecimalFormat
 
 /**
  * Smart coin-amount rounding ported from Unstoppable's `NumberFormatter`/`NumberRounding`: show
@@ -36,3 +37,15 @@ fun formatCoinAmount(value: BigDecimal?, maxDecimals: Int): String {
 /** Zeros between the decimal point and the first significant digit (0 for values ≥ 1). */
 private fun zerosAfterDot(value: BigDecimal): Int =
     (value.scale() - value.precision()).coerceAtLeast(0)
+
+/** USD value formatting matching swap-bot: no decimals ≥ $1,000, two decimals ≥ $1, else compact. */
+fun formatFiat(value: BigDecimal): String {
+    val abs = value.abs()
+    val format = when {
+        abs.signum() == 0 -> return "$0"
+        abs >= BigDecimal(1000) -> DecimalFormat("#,##0")
+        abs >= BigDecimal.ONE -> DecimalFormat("#,##0.00")
+        else -> DecimalFormat("0.####")
+    }
+    return "$" + format.format(value)
+}

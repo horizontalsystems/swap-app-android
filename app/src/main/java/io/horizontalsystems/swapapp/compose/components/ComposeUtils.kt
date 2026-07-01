@@ -1,10 +1,13 @@
 package io.horizontalsystems.swapapp.compose.components
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
@@ -51,11 +54,16 @@ fun HsImageCircle(
     placeholder: Int? = null,
     colorFilter: ColorFilter? = null
 ) {
+    // Back the icon with a filled, bordered circle so logos with a transparent background still read
+    // as a structured coin chip (and full-bleed logos simply cover the fill).
     HsImage(
         url = url,
         alternativeUrl = alternativeUrl,
         placeholder = placeholder,
-        modifier = modifier.clip(CircleShape),
+        modifier = modifier
+            .clip(CircleShape)
+            .background(ComposeAppTheme.colors.white)
+            .border(0.5.dp, ComposeAppTheme.colors.blade, CircleShape),
         colorFilter = colorFilter
     )
 }

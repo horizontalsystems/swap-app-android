@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.swap.MainSwapScreen
@@ -18,6 +19,10 @@ import io.horizontalsystems.swapapp.swap.SwapToken
 import io.horizontalsystems.swapapp.swap.execution.ActiveSwapTrackingScreen
 import io.horizontalsystems.swapapp.swap.execution.AddressInputScreen
 import io.horizontalsystems.swapapp.swap.execution.SwapExecutionViewModel
+import io.horizontalsystems.swapapp.swap.history.SwapHistoryStore
+import io.horizontalsystems.swapapp.swap.history.SwapInfoScreen
+import io.horizontalsystems.swapapp.swap.history.SwapInfoViewModel
+import io.horizontalsystems.swapapp.swap.history.SwapHistoryScreen
 import java.math.BigDecimal
 
 class MainActivity : ComponentActivity() {
@@ -37,6 +42,9 @@ private data class ProceedData(
     val tokenIn: SwapToken,
     val tokenOut: SwapToken,
     val provider: SwapProvider,
+    val amountOut: BigDecimal?,
+    val fiatIn: BigDecimal?,
+    val fiatOut: BigDecimal?,
 )
 
 /**
@@ -45,9 +53,14 @@ private data class ProceedData(
  */
 @Composable
 private fun SwapApp() {
+    val context = LocalContext.current
+    val history = remember { SwapHistoryStore(context) }
+
     var proceed by remember { mutableStateOf<ProceedData?>(null) }
     var destination by remember { mutableStateOf<String?>(null) }
     var refund by remember { mutableStateOf<String?>(null) }
+    var historyOpen by remember { mutableStateOf(false) }
+    var infoUuid by remember { mutableStateOf<String?>(null) }
 
     val data = proceed
     // CEX providers reject a swap without a refund address; on-chain DEXes (THORChain/MayaChain)
@@ -55,10 +68,29 @@ private fun SwapApp() {
     val needsRefund = data?.provider?.requiresRefundAddress == true
 
     when {
+        infoUuid != null -> {
+            BackHandler { infoUuid = null }
+            val viewModel = viewModel<SwapInfoViewModel>(
+                key = "info-$infoUuid",
+                factory = SwapInfoViewModel.Factory(uuid = infoUuid!!, history = history),
+            )
+            SwapInfoScreen(uiState = viewModel.uiState, onBack = { infoUuid = null })
+        }
+
+        historyOpen -> {
+            BackHandler { historyOpen = false }
+            SwapHistoryScreen(
+                store = history,
+                onBack = { historyOpen = false },
+                onOpen = { infoUuid = it.uuid },
+            )
+        }
+
         data == null -> MainSwapScreen(
             onClose = { /* root screen — nothing to go back to */ },
-            onProceed = { amountIn, tokenIn, tokenOut, provider ->
-                proceed = ProceedData(amountIn, tokenIn, tokenOut, provider)
+            onOpenHistory = { historyOpen = true },
+            onProceed = { amountIn, tokenIn, tokenOut, provider, amountOut, fiatIn, fiatOut ->
+                proceed = ProceedData(amountIn, tokenIn, tokenOut, provider, amountOut, fiatIn, fiatOut)
             },
         )
 
@@ -96,9 +128,13 @@ private fun SwapApp() {
                     tokenIn = data.tokenIn,
                     tokenOut = data.tokenOut,
                     amountIn = data.amountIn,
+                    amountOut = data.amountOut,
+                    fiatIn = data.fiatIn,
+                    fiatOut = data.fiatOut,
                     provider = data.provider,
                     destinationAddress = destination!!,
                     refundAddress = refund,
+                    history = history,
                 ),
             )
             val onBack = { if (needsRefund) refund = null else destination = null }

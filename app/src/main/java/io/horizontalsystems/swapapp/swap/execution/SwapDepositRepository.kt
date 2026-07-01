@@ -65,10 +65,20 @@ enum class SwapStatus(val label: String) {
     }
 }
 
-/** A poll result: the current [status] plus the provider's `pauseReason` on action_required. */
+/** A poll result: the current [status], the provider's `pauseReason` on action_required, and the
+ * on-chain [legs] (deposit / swap / send) as they appear, used to link out from the swap-info screen. */
 data class SwapTrackUpdate(
     val status: SwapStatus,
     val pauseReason: String? = null,
+    val legs: List<SwapLeg> = emptyList(),
+)
+
+/** One on-chain hop of a swap from `POST /v2/track`'s `legs`. */
+data class SwapLeg(
+    val type: String?,
+    val chainId: String?,
+    val hash: String?,
+    val status: String?,
 )
 
 /**
@@ -174,29 +184,40 @@ class SwapDepositRepository(
     }
 
     /**
+     * A single `POST /v2/track` read. Transfer providers watch their own deposit address, so no
+     * inbound tx hash is needed. A 409 ("not trackable yet") is reported as [SwapStatus.NotStarted];
+     * any other error as [SwapStatus.Unknown] so callers can choose to keep the last known status.
+     */
+    suspend fun trackOnce(uuid: String): SwapTrackUpdate = withContext(Dispatchers.IO) {
+        try {
+            val resp = api.track(TrackRequestDto(uuid))
+            SwapTrackUpdate(
+                status = SwapStatus.fromApi(resp.status),
+                pauseReason = resp.meta?.pauseReason,
+                legs = resp.legs.orEmpty().map { SwapLeg(it.type, it.chainId, it.hash, it.status) },
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: HttpException) {
+            if (e.code() == 409) {
+                SwapTrackUpdate(SwapStatus.NotStarted) // recorded but not yet trackable
+            } else {
+                Log.e(TAG, "track failed http=${e.code()}", e)
+                SwapTrackUpdate(SwapStatus.Unknown)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "track failed", e)
+            SwapTrackUpdate(SwapStatus.Unknown)
+        }
+    }
+
+    /**
      * Poll `POST /v2/track` for the swap's status, emitting on each tick until a terminal state.
-     * Transfer providers watch their own deposit address, so no inbound tx hash is needed. A 409
-     * ("not trackable yet") or transient error is treated as "keep polling".
+     * A 409 ("not trackable yet") or transient error is treated as "keep polling".
      */
     fun statusUpdates(uuid: String): Flow<SwapTrackUpdate> = flow {
         while (true) {
-            val update = try {
-                val resp = api.track(TrackRequestDto(uuid))
-                SwapTrackUpdate(SwapStatus.fromApi(resp.status), resp.meta?.pauseReason)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: HttpException) {
-                if (e.code() == 409) {
-                    SwapTrackUpdate(SwapStatus.NotStarted) // recorded but not yet trackable
-                } else {
-                    Log.e(TAG, "track failed http=${e.code()}", e)
-                    SwapTrackUpdate(SwapStatus.Unknown)
-                }
-            } catch (e: Throwable) {
-                Log.e(TAG, "track failed", e)
-                SwapTrackUpdate(SwapStatus.Unknown)
-            }
-
+            val update = trackOnce(uuid)
             emit(update)
             if (update.status.isTerminal) break
             delay(POLL_INTERVAL_MS)

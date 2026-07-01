@@ -8,6 +8,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.horizontalsystems.swapapp.swap.SwapProvider
 import io.horizontalsystems.swapapp.swap.SwapToken
+import io.horizontalsystems.swapapp.swap.formatFiat
+import io.horizontalsystems.swapapp.swap.history.RecordToken
+import io.horizontalsystems.swapapp.swap.history.SwapHistoryStore
+import io.horizontalsystems.swapapp.swap.history.SwapRecord
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 
@@ -23,10 +27,14 @@ class SwapExecutionViewModel(
     private val tokenIn: SwapToken,
     private val tokenOut: SwapToken,
     private val amountIn: BigDecimal,
+    private val amountOut: BigDecimal?,
+    private val fiatIn: BigDecimal?,
+    private val fiatOut: BigDecimal?,
     private val provider: SwapProvider,
     private val destinationAddress: String,
     private val refundAddress: String?,
     private val repository: SwapDepositRepository,
+    private val history: SwapHistoryStore,
 ) : ViewModel() {
 
     var uiState by mutableStateOf(
@@ -80,9 +88,14 @@ class SwapExecutionViewModel(
                     amountIn = intent.amountIn,
                 )
 
-                // Poll for live status and walk the tracker forward.
+                // The swap is now committed (real deposit address + uuid) — record it so it shows in
+                // history even after this screen is gone.
+                history.record(buildRecord(intent.uuid, intent.amountIn))
+
+                // Poll for live status and walk the tracker forward, mirroring status into history.
                 repository.statusUpdates(intent.uuid).collect { update ->
                     uiState = uiState.copy(status = update.status, pauseReason = update.pauseReason)
+                    history.updateStatus(intent.uuid, update.status)
                 }
             } catch (e: Throwable) {
                 uiState = uiState.copy(
@@ -93,13 +106,31 @@ class SwapExecutionViewModel(
         }
     }
 
+    private fun buildRecord(uuid: String, committedAmountIn: BigDecimal): SwapRecord = SwapRecord(
+        uuid = uuid,
+        createdAt = System.currentTimeMillis(),
+        providerId = provider.id,
+        providerTitle = provider.title,
+        tokenIn = tokenIn.toRecordToken(),
+        tokenOut = tokenOut.toRecordToken(),
+        amountIn = committedAmountIn.stripTrailingZeros().toPlainString(),
+        amountOut = amountOut?.stripTrailingZeros()?.toPlainString(),
+        fiatIn = fiatIn?.let { formatFiat(it) },
+        fiatOut = fiatOut?.let { formatFiat(it) },
+        status = SwapStatus.NotStarted.name,
+    )
+
     class Factory(
         private val tokenIn: SwapToken,
         private val tokenOut: SwapToken,
         private val amountIn: BigDecimal,
+        private val amountOut: BigDecimal?,
+        private val fiatIn: BigDecimal?,
+        private val fiatOut: BigDecimal?,
         private val provider: SwapProvider,
         private val destinationAddress: String,
         private val refundAddress: String?,
+        private val history: SwapHistoryStore,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -107,14 +138,26 @@ class SwapExecutionViewModel(
                 tokenIn = tokenIn,
                 tokenOut = tokenOut,
                 amountIn = amountIn,
+                amountOut = amountOut,
+                fiatIn = fiatIn,
+                fiatOut = fiatOut,
                 provider = provider,
                 destinationAddress = destinationAddress,
                 refundAddress = refundAddress,
                 repository = SwapDepositRepository(),
+                history = history,
             ) as T
         }
     }
 }
+
+private fun SwapToken.toRecordToken() = RecordToken(
+    ticker = ticker,
+    name = name,
+    network = networkName,
+    logoUrl = logoUrl,
+    chainId = chainId,
+)
 
 data class ActiveSwapUiState(
     val creatingIntent: Boolean,
