@@ -69,7 +69,8 @@ private fun SwapApp() {
                 token = data.tokenOut,
                 title = "Recipient",
                 heading = "Where should we send your ${data.tokenOut.name}?",
-                description = "Enter the ${data.tokenOut.ticker} address that will receive the swapped funds.",
+                description = "The wallet that will receive the swapped funds.",
+                hint = "A ${data.tokenOut.networkName} wallet that will receive the funds.",
                 onBack = { proceed = null },
                 onConfirm = { destination = it },
             )
@@ -80,8 +81,9 @@ private fun SwapApp() {
             AddressInputScreen(
                 token = data.tokenIn,
                 title = "Refund address",
-                heading = "Where should we refund your ${data.tokenIn.name} if the swap fails?",
-                description = "This provider requires a refund address. If the swap can't complete, your ${data.tokenIn.ticker} is returned here.",
+                heading = "Where should we refund you?",
+                description = "Only used if the swap fails.",
+                hint = "A wallet you control on ${data.tokenIn.networkName}.",
                 onBack = { destination = null },
                 onConfirm = { refund = it },
             )

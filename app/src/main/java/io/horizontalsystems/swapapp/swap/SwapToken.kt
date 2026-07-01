@@ -26,6 +26,36 @@ data class SwapToken(
      */
     val isNative: Boolean get() = !identifier.contains("-")
 
+    /**
+     * Human-friendly network name for the token's [chain] (e.g. `ETH` → "Ethereum", `MATIC` →
+     * "Polygon"), used to tell the user which chain an address must be on. Falls back to the API
+     * chain slug or raw [chain] code for anything not in the map — no chain is ever hidden.
+     */
+    val networkName: String
+        get() = when (chain.uppercase()) {
+            "ETH" -> "Ethereum"
+            "BTC" -> "Bitcoin"
+            "BCH" -> "Bitcoin Cash"
+            "LTC" -> "Litecoin"
+            "DOGE" -> "Dogecoin"
+            "DASH" -> "Dash"
+            "MATIC", "POLYGON" -> "Polygon"
+            "BSC", "BNB" -> "BNB Smart Chain"
+            "AVAX" -> "Avalanche"
+            "ARB", "ARBITRUM" -> "Arbitrum"
+            "OP", "OPTIMISM" -> "Optimism"
+            "BASE" -> "Base"
+            "TRX", "TRON" -> "Tron"
+            "SOL", "SOLANA" -> "Solana"
+            "ATOM", "COSMOS", "GAIA" -> "Cosmos"
+            "THOR", "THORCHAIN", "RUNE" -> "THORChain"
+            "MAYA", "MAYACHAIN", "CACAO" -> "Maya"
+            "XRP" -> "XRP Ledger"
+            "ADA", "CARDANO" -> "Cardano"
+            "DOT", "POLKADOT" -> "Polkadot"
+            else -> chainId?.replaceFirstChar { it.uppercase() } ?: chain
+        }
+
     companion object {
         /**
          * Maps a DTO to a token, or null if it lacks the fields we need (so it's skipped). v2 token

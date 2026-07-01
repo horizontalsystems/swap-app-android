@@ -19,6 +19,17 @@ object SwapAddressValidator {
     private val BASE58 = Regex("^[1-9A-HJ-NP-Za-km-z]{25,62}$")
     private val TRON = Regex("^T[1-9A-HJ-NP-Za-km-z]{33}$")
 
+    /**
+     * Grouping key for the recent-address history. All EVM chains collapse to a single "EVM" scope —
+     * a `0x…` address is derived from the same key on every EVM chain, so an address the user entered
+     * for USDT on Ethereum is equally valid for USDC (or any EVM token), and worth suggesting. Other
+     * chains are keyed on their own chain code so their distinct address formats don't mix.
+     */
+    fun addressScope(token: SwapToken): String {
+        val chain = token.chain.uppercase()
+        return if (chain in EVM_CHAINS) "EVM" else chain
+    }
+
     /** Returns null if [address] looks valid for [token]'s chain, otherwise an error message. */
     fun validate(address: String, token: SwapToken): String? {
         val value = address.trim()

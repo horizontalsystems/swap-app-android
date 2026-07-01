@@ -12,7 +12,8 @@ coil = "2.7.0"
 marketKit = "3be4e8a"
 coroutines = "1.9.0"
 rxjava = "2.2.21"
-zxing = "3.4.1"
+zxing = "3.5.3"
+zxingEmbedded = "4.3.0"
 retrofit = "2.11.0"
 okhttpLogging = "4.12.0"
 
@@ -40,6 +41,7 @@ kotlinx-coroutines-rx2 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-rx
 kit-market = { module = "com.github.horizontalsystems:market-kit-android", version.ref = "marketKit" }
 rxjava = { module = "io.reactivex.rxjava2:rxjava", version.ref = "rxjava" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxingEmbedded" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
 okhttp-logging = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttpLogging" }
