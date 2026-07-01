@@ -65,6 +65,7 @@ fun AddressInputScreen(
     hint: String,
     onBack: () -> Unit,
     onConfirm: (address: String) -> Unit,
+    initial: String? = null,
 ) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
@@ -72,7 +73,9 @@ fun AddressInputScreen(
     // EVM tokens share one history bucket — a 0x address entered for any EVM token is valid here too.
     val addressScope = remember(token) { SwapAddressValidator.addressScope(token) }
     val recentAddresses = remember(token) { history.recent(addressScope) }
-    var address by remember { mutableStateOf("") }
+    // Seed with a previously entered address (e.g. after backing out to edit the amount) so it
+    // doesn't have to be re-entered; re-seed if the passed-in value changes.
+    var address by remember(initial) { mutableStateOf(initial.orEmpty()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Launches the zxing scanner; on a successful scan we extract the plain address from whatever

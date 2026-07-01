@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.swap.MainSwapScreen
+import io.horizontalsystems.swapapp.swap.MainSwapViewModel
 import io.horizontalsystems.swapapp.swap.SwapProvider
 import io.horizontalsystems.swapapp.swap.SwapToken
 import io.horizontalsystems.swapapp.swap.execution.ActiveSwapTrackingScreen
@@ -55,10 +56,16 @@ private data class ProceedData(
 private fun SwapApp() {
     val context = LocalContext.current
     val history = remember { SwapHistoryStore(context) }
+    // Same activity-scoped instance MainSwapScreen uses, so "Done" can reset the entered amount.
+    val mainSwapViewModel = viewModel<MainSwapViewModel>()
 
     var proceed by remember { mutableStateOf<ProceedData?>(null) }
     var destination by remember { mutableStateOf<String?>(null) }
     var refund by remember { mutableStateOf<String?>(null) }
+    // Last-confirmed addresses, kept across back-navigation so editing the amount and returning
+    // doesn't force re-entering them — they pre-fill the address screens. Cleared only on a new swap.
+    var savedDestination by remember { mutableStateOf<String?>(null) }
+    var savedRefund by remember { mutableStateOf<String?>(null) }
     var historyOpen by remember { mutableStateOf(false) }
     var infoUuid by remember { mutableStateOf<String?>(null) }
 
@@ -104,7 +111,8 @@ private fun SwapApp() {
                 description = "The wallet that will receive the swapped funds.",
                 hint = "A ${data.tokenOut.networkName} wallet that will receive the funds.",
                 onBack = { proceed = null },
-                onConfirm = { destination = it },
+                onConfirm = { savedDestination = it; destination = it },
+                initial = savedDestination,
             )
         }
 
@@ -117,13 +125,23 @@ private fun SwapApp() {
                 description = "Only used if the swap fails.",
                 hint = "A wallet you control on ${data.tokenIn.networkName}.",
                 onBack = { destination = null },
-                onConfirm = { refund = it },
+                onConfirm = { savedRefund = it; refund = it },
+                initial = savedRefund,
             )
         }
 
         else -> {
             val viewModel = viewModel<SwapExecutionViewModel>(
-                key = "${data.tokenIn.identifier}-$destination-$refund",
+                // Key on every input that defines the swap so editing the amount (or token/provider)
+                // and returning rebuilds the intent instead of reusing a stale cached ViewModel.
+                key = listOf(
+                    data.tokenIn.identifier,
+                    data.tokenOut.identifier,
+                    data.amountIn.stripTrailingZeros().toPlainString(),
+                    data.provider.id,
+                    destination,
+                    refund,
+                ).joinToString("-"),
                 factory = SwapExecutionViewModel.Factory(
                     tokenIn = data.tokenIn,
                     tokenOut = data.tokenOut,
@@ -143,7 +161,10 @@ private fun SwapApp() {
                 uiState = viewModel.uiState,
                 onBack = onBack,
                 onDone = {
-                    // Swap finished — return to a fresh swap screen.
+                    // Swap finished — reset the amount and addresses so the next swap starts fresh.
+                    mainSwapViewModel.onEnterAmount(null)
+                    savedDestination = null
+                    savedRefund = null
                     refund = null
                     destination = null
                     proceed = null
