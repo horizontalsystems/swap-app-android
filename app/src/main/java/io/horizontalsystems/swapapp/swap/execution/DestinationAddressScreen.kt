@@ -56,8 +56,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Asks the user for an address on [token]'s chain (recipient or refund). A token/network pill makes
- * the required chain explicit, [hint] explains what address is expected, and paste/scan actions plus
- * per-chain validation guard the input before it's handed back via [onConfirm].
+ * the required chain explicit, [description] explains what address is expected, and paste/scan
+ * actions plus per-chain validation guard the input before it's handed back via [onConfirm].
  */
 @Composable
 fun AddressInputScreen(
@@ -65,7 +65,6 @@ fun AddressInputScreen(
     title: String,
     heading: String,
     description: String,
-    hint: String,
     onBack: () -> Unit,
     onConfirm: (address: String) -> Unit,
     initial: String? = null,
@@ -253,24 +252,6 @@ fun AddressInputScreen(
                     text = it,
                     style = ComposeAppTheme.typography.subhead,
                     color = ComposeAppTheme.colors.lucian,
-                )
-            }
-
-            VSpacer(12.dp)
-
-            // Hint clarifying what kind of address is expected on this chain.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(R.drawable.info_20),
-                    contentDescription = null,
-                    tint = ComposeAppTheme.colors.grey,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = hint,
-                    style = ComposeAppTheme.typography.subhead,
-                    color = ComposeAppTheme.colors.grey,
                 )
             }
 
