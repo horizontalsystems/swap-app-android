@@ -36,6 +36,29 @@ android {
             "SWAP_API_KEY",
             "\"${localProps.getProperty("SWAP_API_KEY", "")}\""
         )
+
+        // Optional address-screening providers. Blank keys leave the checks inert (see
+        // AddressCheckManager); the on-chain contract blacklist checks run without any key.
+        buildConfigField(
+            "String",
+            "HASHDIT_BASE_URL",
+            "\"${localProps.getProperty("HASHDIT_BASE_URL", "https://api.hashdit.io/security-api/public/app/v1/")}\""
+        )
+        buildConfigField(
+            "String",
+            "HASHDIT_API_KEY",
+            "\"${localProps.getProperty("HASHDIT_API_KEY", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "CHAINALYSIS_BASE_URL",
+            "\"${localProps.getProperty("CHAINALYSIS_BASE_URL", "https://public.chainalysis.com/api/v1/")}\""
+        )
+        buildConfigField(
+            "String",
+            "CHAINALYSIS_API_KEY",
+            "\"${localProps.getProperty("CHAINALYSIS_API_KEY", "")}\""
+        )
     }
 
     // Release signing, configured from local.properties (not version controlled). The config is

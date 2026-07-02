@@ -18,6 +18,13 @@ data class SwapToken(
     val logoUrl: String?,
     val coingeckoId: String?,
     val providers: List<String>,
+    /**
+     * The token's contract address, or null for a native coin. Taken from the DTO's `address` field —
+     * NOT from the [identifier] suffix, which the API uppercases (`ETH.USDT-0XDAC17F…`), destroying
+     * the case-sensitive Base58 of Tron contracts and the `0x` prefix EVM checks look for. Used by
+     * the on-chain blacklist checks to know which contract to query.
+     */
+    val contractAddress: String? = null,
 ) {
     /**
      * True for a chain's native coin (e.g. `BTC.BTC`, `ETH.ETH`). Native tokens have no contract
@@ -75,6 +82,7 @@ data class SwapToken(
                 logoUrl = dto.logoURI,
                 coingeckoId = dto.coingeckoId,
                 providers = providers,
+                contractAddress = dto.address?.takeIf { it.isNotBlank() },
             )
         }
     }
