@@ -66,44 +66,68 @@ class MainSwapViewModel(application: Application) : AndroidViewModel(application
     fun onSelectQuote(quote: SwapProviderQuote) = quoteService.selectQuote(quote)
 
     /**
-     * Pre-select the pair on launch: restore the last-used tokens from [SwapTokenStore], or — when
-     * nothing was ever selected — default to the most popular pair (the top tokens from
-     * [SwapPopularTokens], e.g. BTC → USDT). Resolved against the live token universe, so a stored
-     * token that has since disappeared is simply skipped.
+     * Pre-select the pair on launch. The instant path is a plain prefs read — no network: the
+     * persisted token snapshots of the last-used pair, or, on a fresh install, the bundled
+     * [SwapDefaultTokens] pair. The token universe then loads in the background and the pair is
+     * re-resolved against it: snapshots pick up current metadata, and the first-run seed is
+     * replaced by the live most-popular pair (the top tokens from [SwapPopularTokens]).
      */
     private fun restoreSelectedPair() {
+        val snapshotIn = tokenStore.tokenIn
+        val snapshotOut = tokenStore.tokenOut
+        // The id-only keys also cover installs that predate the snapshots.
+        val storedInId = snapshotIn?.identifier ?: tokenStore.tokenInId
+        val storedOutId = snapshotOut?.identifier ?: tokenStore.tokenOutId
+        // First run = nothing was ever persisted. (An id without a snapshot — a pre-snapshot
+        // install — must NOT be overridden by the seed; it resolves below instead.)
+        val firstRun = storedInId == null && storedOutId == null
+
+        val instantIn = snapshotIn ?: SwapDefaultTokens.tokenIn.takeIf { firstRun }
+        val instantOut = snapshotOut ?: SwapDefaultTokens.tokenOut.takeIf { firstRun }
+        instantIn?.let { quoteService.setTokenIn(it) }
+        instantOut?.let { quoteService.setTokenOut(it) }
+
         viewModelScope.launch {
             val all = try {
                 tokenRepository.all()
             } catch (e: Throwable) {
-                return@launch // leave the pair empty; the user can still pick manually
+                return@launch // the instant pair (if any) stays; the user can still pick manually
             }
             val byId = all.associateBy { it.identifier }
 
-            val storedIn = tokenStore.tokenInId?.let { byId[it] }
-            val storedOut = tokenStore.tokenOutId?.let { byId[it] }
-
             val tokenIn: SwapToken?
             val tokenOut: SwapToken?
-            if (storedIn != null || storedOut != null) {
-                tokenIn = storedIn
-                tokenOut = storedOut
+            if (!firstRun) {
+                // A stored token that has since disappeared from the universe is simply skipped.
+                tokenIn = storedInId?.let { byId[it] }
+                tokenOut = storedOutId?.let { byId[it] }
             } else {
-                // No swap was ever done — seed the most popular pair.
+                // No swap was ever done — resolve the live most-popular pair.
                 tokenIn = SwapPopularTokens.build(all, context = null).firstOrNull()
                 tokenOut = tokenIn?.let { SwapPopularTokens.build(all, context = it).firstOrNull() }
             }
 
-            tokenIn?.let { quoteService.setTokenIn(it) }
-            tokenOut?.let { quoteService.setTokenOut(it) }
+            // Apply the freshly resolved tokens, but never clobber a token the user changed while
+            // the universe was loading. Re-setting an identical token is a no-op in the service.
+            val current = quoteService.stateFlow.value
+            if (tokenIn != null && current.tokenIn?.identifier == instantIn?.identifier) {
+                quoteService.setTokenIn(tokenIn)
+            }
+            if (tokenOut != null && current.tokenOut?.identifier == instantOut?.identifier) {
+                quoteService.setTokenOut(tokenOut)
+            }
+            // Converge the stored snapshots to the fresh metadata for the next launch.
+            persistSelectedPair()
         }
     }
 
-    /** Persist the current pair so it's pre-selected next launch. */
+    /** Persist the current pair (id + full snapshot) so it's pre-selected next launch. */
     private fun persistSelectedPair() {
         val state = quoteService.stateFlow.value
         tokenStore.tokenInId = state.tokenIn?.identifier
         tokenStore.tokenOutId = state.tokenOut?.identifier
+        tokenStore.tokenIn = state.tokenIn
+        tokenStore.tokenOut = state.tokenOut
     }
 
     /** Fetch USD prices when the pair's CoinGecko ids change; the service caches the rest. */
