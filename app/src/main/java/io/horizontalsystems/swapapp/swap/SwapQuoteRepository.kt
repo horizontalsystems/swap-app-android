@@ -69,6 +69,7 @@ class SwapQuoteRepository(
                 amountIn = amountIn,
                 estimationTime = estimatedTime?.total,
                 fee = toFee(),
+                amlPolicy = amlPolicy,
             ),
         )
     }

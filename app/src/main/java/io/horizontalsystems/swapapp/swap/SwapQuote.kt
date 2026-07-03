@@ -13,6 +13,8 @@ data class SwapQuote(
     val amountIn: BigDecimal,
     val estimationTime: Long? = null,
     val fee: SwapFee? = null,
+    /** Route safety rating from the API (`excellent` / `good` / `fair`); null when absent. */
+    val amlPolicy: String? = null,
 )
 
 /** A fee from the quote, expressed as an amount in a named asset (e.g. 0.037 in "ETH"). */
@@ -32,4 +34,5 @@ data class SwapProviderQuote(
     val amountOut by swapQuote::amountOut
     val estimationTime by swapQuote::estimationTime
     val fee by swapQuote::fee
+    val amlPolicy by swapQuote::amlPolicy
 }

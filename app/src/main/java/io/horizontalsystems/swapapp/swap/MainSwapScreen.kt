@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -112,9 +113,10 @@ fun MainSwapScreen(
             },
         )
 
-        showProviders -> SwapSelectProviderScreen(
+        showProviders -> SwapSelectRouteScreen(
             quotes = uiState.quotes,
             selectedQuote = uiState.quote,
+            priceOut = uiState.priceOut,
             onSelectQuote = {
                 viewModel.onSelectQuote(it)
                 showProviders = false
@@ -188,7 +190,7 @@ private fun SwapForm(
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
                         ) {
                             Text(
                                 text = formatCoinAmount(uiState.amountOut, uiState.tokenOut?.decimals ?: 8),
@@ -197,13 +199,13 @@ private fun SwapForm(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (uiState.fiatOut != null) {
-                                Text(
-                                    text = formatFiat(uiState.fiatOut),
-                                    style = ComposeAppTheme.typography.subhead,
-                                    color = ComposeAppTheme.colors.grey,
-                                )
-                            }
+                            // Always rendered (with a "$0" fallback, like the reference's
+                            // SwapCoinInputTo) so the row doesn't grow when the price arrives.
+                            Text(
+                                text = uiState.fiatOut?.let { formatFiat(it) } ?: "$0",
+                                style = ComposeAppTheme.typography.body,
+                                color = ComposeAppTheme.colors.grey,
+                            )
                         }
                     }
                 }
@@ -211,23 +213,45 @@ private fun SwapForm(
                 SwitchPairsButton(onClick = onSwitchPairs)
             }
 
-            Column(modifier = Modifier.padding(16.dp)) {
-                StatusText(uiState)
-
-                // Provider selector — shows the winning quote and opens the full provider list.
+            // White bottom sheet: the route cell at the top, the primary button pinned at the
+            // bottom edge; everything between stays clean white space.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(ComposeAppTheme.colors.lawrence)
+            ) {
+                // Route cell — shows the winning quote's rate and opens the routes list.
                 if (uiState.quotes.isNotEmpty()) {
-                    VSpacer(16.dp)
-                    ProviderSelectorRow(
-                        providerTitle = uiState.quote?.provider?.title ?: "Select provider",
-                        quoteCount = uiState.quotes.size,
-                        onClick = onClickProviders,
+                    // Price direction resets when the pair changes, mirroring the reference SwapPage.
+                    var showRegularPrice by remember(uiState.tokenIn, uiState.tokenOut) {
+                        mutableStateOf(true)
+                    }
+                    RouteSelectorRow(
+                        rate = rateText(uiState.quote, showRegularPrice),
+                        onClickRoute = onClickProviders,
+                        onClickPrice = { showRegularPrice = !showRegularPrice },
                     )
                 }
-
-                VSpacer(16.dp)
+                uiState.error?.let {
+                    Text(
+                        text = errorMessage(it),
+                        style = ComposeAppTheme.typography.subhead,
+                        color = ComposeAppTheme.colors.lucian,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 ButtonPrimaryYellow(
-                    modifier = Modifier.fillMaxWidth(),
-                    title = "Next",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    title = when {
+                        uiState.quoting -> "Quoting"
+                        uiState.tokenIn == null || uiState.tokenOut == null -> "Select Tokens"
+                        uiState.amountIn == null || uiState.amountIn.signum() <= 0 -> "Enter Amount"
+                        else -> "Next"
+                    },
                     enabled = uiState.canProceed,
                     loadingIndicator = uiState.quoting,
                     onClick = onClickNext,
@@ -238,8 +262,9 @@ private fun SwapForm(
 }
 
 /**
- * A flat token row: tappable coin image + ticker (with dropdown caret) + network badge on the left,
- * and the amount ([amountContent]) on the right. Mirrors the design's `CellPrimary` layout.
+ * A flat token row: tappable coin selector (image + ticker + network badge + caret) on the left,
+ * and the amount ([amountContent]) on the right. Sizes, styles and paddings mirror the reference
+ * wallet's `SwapCoinInput*`/`CoinSelector`/`Selector` in `multiswap.SwapPage`.
  */
 @Composable
 private fun SwapTokenRow(
@@ -250,40 +275,52 @@ private fun SwapTokenRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 24.dp),
+            .padding(horizontal = 16.dp, vertical = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.clickable(onClick = onClickToken),
+            modifier = Modifier.clickable(
+                interactionSource = null,
+                indication = null,
+                onClick = onClickToken,
+            ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (token != null) {
-                CoinImage(url = token.logoUrl, modifier = Modifier.size(40.dp))
+                CoinImage(url = token.logoUrl, modifier = Modifier.size(32.dp))
             } else {
                 Image(
                     painter = painterResource(R.drawable.coin_placeholder),
                     contentDescription = null,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(32.dp),
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+            HSpacer(16.dp)
+            if (token != null) {
+                Column {
                     Text(
-                        text = token?.ticker ?: "Select",
-                        style = ComposeAppTheme.typography.headline1,
-                        color = if (token != null) ComposeAppTheme.colors.leah else ComposeAppTheme.colors.jacob,
+                        text = token.ticker,
+                        style = ComposeAppTheme.typography.headline2,
+                        color = ComposeAppTheme.colors.leah,
                     )
-                    Text(text = "▾", color = ComposeAppTheme.colors.grey)
-                }
-                if (token != null) {
+                    VSpacer(5.dp)
                     Badge(text = networkName(token))
                 }
+            } else {
+                Text(
+                    text = "Select",
+                    style = ComposeAppTheme.typography.headline2,
+                    color = ComposeAppTheme.colors.jacob,
+                )
             }
+            HSpacer(8.dp)
+            Icon(
+                painter = painterResource(R.drawable.arrow_s_down_20),
+                contentDescription = null,
+                tint = ComposeAppTheme.colors.leah,
+            )
         }
+        HSpacer(8.dp)
         Box(modifier = Modifier.weight(1f)) {
             amountContent()
         }
@@ -514,55 +551,73 @@ private fun SwitchPairsButton(onClick: () -> Unit) {
 private fun networkName(token: SwapToken): String =
     token.chain.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
 
+/**
+ * The route cell on the white area, split like the reference's `ProviderCellInfo`: only the
+ * "Route ▾" selector on the left opens the routes list, while tapping the price on the right
+ * toggles its direction ("1 BTC = 2980 USDT" ↔ "1 USDT = 0.00033 BTC").
+ */
 @Composable
-private fun ProviderSelectorRow(
-    providerTitle: String,
-    quoteCount: Int,
-    onClick: () -> Unit,
+private fun RouteSelectorRow(
+    rate: String?,
+    onClickRoute: () -> Unit,
+    onClickPrice: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(ComposeAppTheme.colors.lawrence)
-            .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        // Left selector — the only part that opens the routes list (reference: LeftSelector).
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable(onClick = onClickRoute),
+        ) {
             Text(
-                text = "Provider",
+                text = "Route",
                 style = ComposeAppTheme.typography.subhead,
-                color = ComposeAppTheme.colors.grey,
-            )
-            Text(
-                text = providerTitle,
-                style = ComposeAppTheme.typography.headline2,
                 color = ComposeAppTheme.colors.leah,
             )
+            Icon(
+                modifier = Modifier.size(20.dp),
+                painter = painterResource(R.drawable.arrow_s_down_24),
+                contentDescription = null,
+                tint = ComposeAppTheme.colors.leah,
+            )
         }
-        Text(
-            text = "$quoteCount quotes",
-            style = ComposeAppTheme.typography.subhead,
-            color = ComposeAppTheme.colors.grey,
-        )
-        HSpacer(4.dp)
-        Text(text = "›", style = ComposeAppTheme.typography.headline2, color = ComposeAppTheme.colors.grey)
+        Spacer(modifier = Modifier.weight(1f))
+        // Price — its own ripple-free click target that flips the rate direction (reference:
+        // CellRightControlsButtonText).
+        rate?.let {
+            Text(
+                text = it,
+                style = ComposeAppTheme.typography.subhead,
+                color = ComposeAppTheme.colors.leah,
+                modifier = Modifier.clickable(
+                    interactionSource = null,
+                    indication = null,
+                    onClick = onClickPrice,
+                ),
+            )
+        }
     }
 }
 
-@Composable
-private fun StatusText(uiState: MainSwapUiState) {
-    val (text, color) = when {
-        uiState.quoting -> "Fetching best quote…" to ComposeAppTheme.colors.grey
-        uiState.error != null -> errorMessage(uiState.error) to ComposeAppTheme.colors.lucian
-        uiState.tokenIn == null || uiState.tokenOut == null -> "Select tokens to swap" to ComposeAppTheme.colors.grey
-        uiState.amountIn == null -> "Enter an amount" to ComposeAppTheme.colors.grey
-        // No "via {provider}" line once a quote exists — the provider cell below already shows it.
-        else -> "" to ComposeAppTheme.colors.grey
-    }
-    if (text.isNotEmpty()) {
-        Text(text = text, style = ComposeAppTheme.typography.subhead, color = color)
+/**
+ * The selected quote's rate, ported from the reference `SwapPriceUIHelper`: "1 BTC = 2980 USDT"
+ * when [regular], the inverted "1 USDT = 0.00033 BTC" otherwise; null without a complete quote.
+ */
+private fun rateText(quote: SwapProviderQuote?, regular: Boolean): String? {
+    if (quote == null || quote.amountIn.signum() <= 0 || quote.amountOut.signum() <= 0) return null
+    return if (regular) {
+        val price = quote.amountOut
+            .divide(quote.amountIn, quote.tokenOut.decimals, RoundingMode.HALF_EVEN)
+        "1 ${quote.tokenIn.ticker} = ${formatCoinAmount(price, quote.tokenOut.decimals)} ${quote.tokenOut.ticker}"
+    } else {
+        val priceInv = quote.amountIn
+            .divide(quote.amountOut, quote.tokenIn.decimals, RoundingMode.HALF_EVEN)
+        "1 ${quote.tokenOut.ticker} = ${formatCoinAmount(priceInv, quote.tokenIn.decimals)} ${quote.tokenIn.ticker}"
     }
 }
 

@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 
@@ -29,6 +30,7 @@ class MainSwapViewModel(application: Application) : AndroidViewModel(application
     private var quoteState = quoteService.stateFlow.value
     private var prices: Map<String, BigDecimal> = emptyMap()
     private var pricedIds: Set<String> = emptySet()
+    private var priceJob: Job? = null
 
     var uiState by mutableStateOf(buildState())
         private set
@@ -136,14 +138,20 @@ class MainSwapViewModel(application: Application) : AndroidViewModel(application
         if (ids == pricedIds) return
         pricedIds = ids
 
+        // Cancel any in-flight fetch for a previous id set — e.g. the tokenIn-only fetch fired
+        // while the pair was still being restored. Letting it finish would overwrite [prices]
+        // with its subset and silently drop the other token's fiat values.
+        priceJob?.cancel()
+
         if (ids.isEmpty()) {
             prices = emptyMap()
             uiState = buildState()
             return
         }
 
-        viewModelScope.launch {
-            prices = priceService.prices(ids.toList())
+        priceJob = viewModelScope.launch {
+            // Merge instead of replace so a fetch for a subset can never drop known prices.
+            prices = prices + priceService.prices(ids.toList())
             uiState = buildState()
         }
     }
@@ -163,6 +171,7 @@ class MainSwapViewModel(application: Application) : AndroidViewModel(application
             quotes = s.quotes,
             error = s.error,
             priceIn = priceIn,
+            priceOut = priceOut,
             fiatIn = priceIn?.multiply(s.amountIn ?: BigDecimal.ZERO),
             fiatOut = priceOut?.multiply(amountOut ?: BigDecimal.ZERO),
         )
@@ -179,6 +188,7 @@ data class MainSwapUiState(
     val quotes: List<SwapProviderQuote>,
     val error: Throwable?,
     val priceIn: BigDecimal? = null,
+    val priceOut: BigDecimal? = null,
     val fiatIn: BigDecimal? = null,
     val fiatOut: BigDecimal? = null,
 ) {
