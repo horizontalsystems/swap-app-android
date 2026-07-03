@@ -52,6 +52,7 @@ import io.horizontalsystems.swapapp.swap.SwapToken
 import io.horizontalsystems.swapapp.swap.execution.address.check.AddressCheckManager
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -83,17 +84,51 @@ fun AddressInputScreen(
     val checkManager = remember { AddressCheckManager() }
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
+    // The (trimmed) address that passed the full validation + screening, so Confirm can proceed
+    // without re-checking. Any edit makes the on-screen address diverge from it, forcing a re-check.
+    var validatedAddress by remember { mutableStateOf<String?>(null) }
+    var checkJob by remember { mutableStateOf<Job?>(null) }
+
+    /**
+     * Validates [raw] (synchronous format check, then async blacklist/sanction screening) while the
+     * Confirm button shows a "Validating…" spinner. Runs eagerly when an address arrives whole —
+     * paste, QR scan, a recent-address tap — and from Confirm for typed input; [confirmAfter]
+     * proceeds straight to [onConfirm] once the check passes. Any newer input cancels a running check.
+     */
+    fun runValidation(raw: String, confirmAfter: Boolean = false) {
+        checkJob?.cancel()
+        error = null
+        val trimmed = raw.trim()
+        val validationError = SwapAddressValidator.validate(trimmed, token)
+        if (validationError != null) {
+            checking = false
+            error = validationError
+            return
+        }
+        checking = true
+        checkJob = scope.launch {
+            // A blacklisted/sanctioned address is blocked like an invalid one; a failed check is
+            // inconclusive (null) and lets the swap proceed.
+            val issue = checkManager.firstDetectedIssue(trimmed, token)
+            checking = false
+            if (issue != null) {
+                error = issue.message(token)
+            } else {
+                validatedAddress = trimmed
+                if (confirmAfter) {
+                    history.add(addressScope, trimmed)
+                    onConfirm(trimmed)
+                }
+            }
+        }
+    }
 
     // Launches the zxing scanner; on a successful scan we extract the plain address from whatever
     // the QR encodes (a bare address, or a BIP21/EIP-681 URI like "bitcoin:…" / "ethereum:…").
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
-        // Ignore a late scan result while the async check is running — the confirmed address must be
-        // exactly what's on screen, so no input path may change it mid-check.
-        if (!checking) {
-            result.contents?.let {
-                address = parseScannedAddress(it)
-                error = null
-            }
+        result.contents?.let {
+            address = parseScannedAddress(it)
+            runValidation(address)
         }
     }
 
@@ -109,29 +144,20 @@ fun AddressInputScreen(
             ) {
                 ButtonPrimaryYellow(
                     modifier = Modifier.fillMaxWidth(),
-                    title = if (checking) "Checking…" else "Confirm",
-                    enabled = address.isNotBlank() && !checking,
+                    title = if (checking) "Validating address…" else "Confirm",
+                    // Disabled while validating and while the current input is known-bad (invalid
+                    // format or blacklisted); any edit clears [error] and re-enables it.
+                    enabled = address.isNotBlank() && !checking && error == null,
                     loadingIndicator = checking,
                     onClick = {
-                        val validationError = SwapAddressValidator.validate(address, token)
-                        if (validationError != null) {
-                            error = validationError
+                        val confirmed = address.trim()
+                        if (confirmed == validatedAddress) {
+                            // Already validated (eagerly, on paste/scan) — proceed straight away.
+                            history.add(addressScope, confirmed)
+                            onConfirm(confirmed)
                         } else {
-                            val confirmed = address.trim()
-                            error = null
-                            checking = true
-                            scope.launch {
-                                // A blacklisted/sanctioned address is blocked like an invalid one; a
-                                // failed check is inconclusive (null) and lets the swap proceed.
-                                val issue = checkManager.firstDetectedIssue(confirmed, token)
-                                checking = false
-                                if (issue != null) {
-                                    error = issue.message(token)
-                                } else {
-                                    history.add(addressScope, confirmed)
-                                    onConfirm(confirmed)
-                                }
-                            }
+                            // Typed or edited input — validate now and proceed on success.
+                            runValidation(address, confirmAfter = true)
                         }
                     },
                 )
@@ -194,11 +220,12 @@ fun AddressInputScreen(
                     BasicTextField(
                         value = address,
                         onValueChange = {
+                            // A manual edit supersedes any in-flight check of the old value.
+                            checkJob?.cancel()
+                            checking = false
                             address = it
                             error = null
                         },
-                        // Frozen while the async check runs — see the scan-result comment above.
-                        readOnly = checking,
                         modifier = Modifier.fillMaxWidth(),
                         textStyle = ComposeAppTheme.typography.subhead.copy(
                             color = ComposeAppTheme.colors.leah
@@ -221,10 +248,9 @@ fun AddressInputScreen(
                     icon = R.drawable.paste_24,
                     contentDescription = "Paste",
                     onClick = {
-                        if (checking) return@InputActionButton
                         clipboard.getText()?.text?.let {
                             address = it.trim()
-                            error = null
+                            runValidation(address)
                         }
                     },
                 )
@@ -233,7 +259,6 @@ fun AddressInputScreen(
                     icon = R.drawable.qr_scan_24,
                     contentDescription = "Scan QR code",
                     onClick = {
-                        if (checking) return@InputActionButton
                         scanLauncher.launch(
                             ScanOptions().apply {
                                 setDesiredBarcodeFormats(ScanOptions.QR_CODE)
@@ -277,10 +302,8 @@ fun AddressInputScreen(
                             recent = recent,
                             logoUrl = token.logoUrl,
                             onClick = {
-                                if (!checking) {
-                                    address = recent.address
-                                    error = null
-                                }
+                                address = recent.address
+                                runValidation(address)
                             },
                         )
                     }
