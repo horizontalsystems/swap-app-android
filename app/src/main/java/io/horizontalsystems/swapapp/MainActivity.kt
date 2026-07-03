@@ -106,8 +106,7 @@ private fun SwapApp() {
             BackHandler { proceed = null }
             AddressInputScreen(
                 token = data.tokenOut,
-                title = "Recipient",
-                heading = "Where should we send your ${data.tokenOut.name}?",
+                title = "Recipient Address",
                 description = "The ${data.tokenOut.networkName} wallet that will receive the swapped funds.",
                 onBack = { proceed = null },
                 onConfirm = { savedDestination = it; destination = it },
@@ -119,8 +118,7 @@ private fun SwapApp() {
             BackHandler { destination = null }
             AddressInputScreen(
                 token = data.tokenIn,
-                title = "Refund address",
-                heading = "Where should we refund you?",
+                title = "Refund Address",
                 description = "A ${data.tokenIn.networkName} wallet you control, used only if the swap fails.",
                 onBack = { destination = null },
                 onConfirm = { savedRefund = it; refund = it },
