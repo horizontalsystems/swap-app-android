@@ -1,5 +1,6 @@
 package io.horizontalsystems.swapapp
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -13,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
+import io.horizontalsystems.swapapp.onboarding.OnboardingScreen
 import io.horizontalsystems.swapapp.swap.MainSwapScreen
 import io.horizontalsystems.swapapp.swap.MainSwapViewModel
 import io.horizontalsystems.swapapp.swap.SwapProvider
@@ -55,6 +57,19 @@ private data class ProceedData(
 @Composable
 private fun SwapApp() {
     val context = LocalContext.current
+
+    val prefs = remember { context.getSharedPreferences("app_settings", Context.MODE_PRIVATE) }
+    var onboarded by remember { mutableStateOf(prefs.getBoolean("onboarding_complete", false)) }
+    if (!onboarded) {
+        OnboardingScreen(
+            onFinish = {
+                prefs.edit().putBoolean("onboarding_complete", true).apply()
+                onboarded = true
+            },
+        )
+        return
+    }
+
     val history = remember { SwapHistoryStore(context) }
     // Same activity-scoped instance MainSwapScreen uses, so "Done" can reset the entered amount.
     val mainSwapViewModel = viewModel<MainSwapViewModel>()
