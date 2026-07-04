@@ -89,6 +89,8 @@ data class SwapLeg(
  *  - [attachmentValue] — a destination tag / memo that MUST accompany the send for some chains
  *    (XRP, RUNE, …), or the funds are lost. [attachmentLabel] names it for the UI.
  *  - [uuid] — the tracking handle for `POST /v2/track`.
+ *  - [expiresAtMillis] — the order expiry (epoch ms); the deposit must arrive before it.
+ *  - [trackUrl] — the `swap.unstoppable.money/track` web page for this order, when it can be built.
  */
 data class SwapIntent(
     val uuid: String,
@@ -99,7 +101,8 @@ data class SwapIntent(
     val attachmentLabel: String?,
     val paymentUri: String?,
     val deeplink: String?,
-    val secondsRemaining: Long?,
+    val expiresAtMillis: Long?,
+    val trackUrl: String?,
 )
 
 /**
@@ -176,10 +179,20 @@ class SwapDepositRepository(
             attachmentLabel = execution.attachment?.let { attachmentLabel(it.type) },
             paymentUri = execution.qr?.str?.takeIf { it.isNotBlank() },
             deeplink = deeplink(execution.qr?.str),
-            secondsRemaining = route.expiresAt
-                ?.let { it - System.currentTimeMillis() }
-                ?.let { it / 1000 }
-                ?.coerceAtLeast(0),
+            // v2 documents epoch ms, but v1 sent epoch seconds — normalize so a backend
+            // regression can't render the order permanently "Expired".
+            expiresAtMillis = route.expiresAt?.let { if (it < 100_000_000_000L) it * 1000 else it },
+            trackUrl = trackUrl(
+                provider = provider,
+                providerSwapId = route.providerSwapId,
+                depositAddress = depositAddress,
+                tokenIn = tokenIn,
+                tokenOut = tokenOut,
+                amountIn = execution.amount ?: sellAmount,
+                amountOut = route.expectedBuyAmount,
+                destinationAddress = destinationAddress,
+                refundAddress = refundAddress,
+            ),
         )
     }
 
@@ -227,6 +240,38 @@ class SwapDepositRepository(
     /** Wrap a payment URI in the Unstoppable pay deeplink so a tap opens the user's wallet. */
     private fun deeplink(paymentUri: String?): String? = paymentUri?.takeIf { it.isNotBlank() }?.let {
         "https://swap.unstoppable.money/pay?uri=" + URLEncoder.encode(it, "UTF-8")
+    }
+
+    /**
+     * The `swap.unstoppable.money/track` web page for this order, mirroring swap-bot's
+     * `buildTrackUrl`: THORCHAIN/NEAR orders are keyed by their deposit address, everything else by
+     * the provider's own order id — without one there is no page to link to, so this returns null.
+     */
+    private fun trackUrl(
+        provider: SwapProvider,
+        providerSwapId: String?,
+        depositAddress: String,
+        tokenIn: SwapToken,
+        tokenOut: SwapToken,
+        amountIn: String,
+        amountOut: String?,
+        destinationAddress: String,
+        refundAddress: String?,
+    ): String? {
+        val params = mutableListOf("provider" to provider.id)
+        when (provider.id) {
+            "THORCHAIN", "NEAR" -> params += "depositAddress" to depositAddress
+            else -> params += "providerSwapId" to (providerSwapId?.takeIf { it.isNotBlank() } ?: return null)
+        }
+        tokenIn.chainId?.let { params += "chainId" to it }
+        params += "fromAsset" to tokenIn.identifier
+        params += "fromAmount" to amountIn
+        params += "toAsset" to tokenOut.identifier
+        amountOut?.let { params += "toAmount" to it }
+        params += "toAddress" to destinationAddress
+        refundAddress?.let { params += "refundAddress" to it }
+        return "https://swap.unstoppable.money/track?" +
+            params.joinToString("&") { (k, v) -> "$k=" + URLEncoder.encode(v, "UTF-8") }
     }
 
     private fun attachmentLabel(type: String?): String = when (type?.lowercase()) {

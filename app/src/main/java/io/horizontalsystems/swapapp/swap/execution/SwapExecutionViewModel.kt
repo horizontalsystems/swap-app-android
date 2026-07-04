@@ -46,7 +46,11 @@ class SwapExecutionViewModel(
             attachmentLabel = null,
             paymentUri = null,
             deeplink = null,
+            expiresAtMillis = null,
+            trackUrl = null,
             amountIn = amountIn,
+            amountOut = amountOut,
+            fiatOut = fiatOut,
             tokenInCode = tokenIn.ticker,
             tokenInNetwork = tokenIn.networkName,
             tokenInLogo = tokenIn.logoUrl,
@@ -89,6 +93,8 @@ class SwapExecutionViewModel(
                     attachmentLabel = intent.attachmentLabel,
                     paymentUri = intent.paymentUri,
                     deeplink = intent.deeplink,
+                    expiresAtMillis = intent.expiresAtMillis,
+                    trackUrl = intent.trackUrl,
                     amountIn = intent.amountIn,
                 )
 
@@ -172,7 +178,13 @@ data class ActiveSwapUiState(
     val attachmentLabel: String?,
     val paymentUri: String?,
     val deeplink: String?,
+    /** Order expiry (epoch ms) from the backend, or null when the provider sets none. */
+    val expiresAtMillis: Long?,
+    /** `swap.unstoppable.money/track` page for this order, when it could be built. */
+    val trackUrl: String?,
     val amountIn: BigDecimal,
+    val amountOut: BigDecimal?,
+    val fiatOut: BigDecimal?,
     val tokenInCode: String,
     val tokenInNetwork: String,
     val tokenInLogo: String?,

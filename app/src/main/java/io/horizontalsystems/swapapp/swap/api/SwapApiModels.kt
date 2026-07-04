@@ -94,6 +94,8 @@ data class RouteDto(
     val amlPolicy: String?,
     val execution: ExecutionDto?,
     val uuid: String?,
+    /** The provider's own order id; the `swap.unstoppable.money/track` web page keys on it. */
+    val providerSwapId: String?,
 )
 
 /**

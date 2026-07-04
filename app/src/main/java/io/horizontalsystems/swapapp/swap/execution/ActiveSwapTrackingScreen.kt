@@ -4,67 +4,65 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
-import io.horizontalsystems.swapapp.compose.TranslatableString
 import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
+import io.horizontalsystems.swapapp.compose.components.ButtonSecondary
 import io.horizontalsystems.swapapp.compose.components.CoinImage
 import io.horizontalsystems.swapapp.compose.components.HSpacer
-import io.horizontalsystems.swapapp.compose.components.MenuItem
 import io.horizontalsystems.swapapp.compose.components.VSpacer
-import io.horizontalsystems.swapapp.compose.manropeFont
+import io.horizontalsystems.swapapp.swap.formatCoinAmount
+import io.horizontalsystems.swapapp.swap.formatFiat
+import kotlinx.coroutines.delay
 import java.math.BigDecimal
 
 /**
- * Shows the generated deposit details (QR + address + exact amount) and a vertical tracker that
- * follows the swap through its stages as [SwapExecutionViewModel] polls `POST /v2/track`.
+ * Deposit instructions for a committed swap: which token is swapping to which (a spinner over the
+ * sell-token icon while the deposit hasn't arrived), the order expiry countdown when the backend
+ * set one, and the numbered steps to make the swap happen (copy address / copy amount / track by
+ * link). Status keeps polling `POST /v2/track` via [SwapExecutionViewModel] underneath.
  */
 @Composable
 fun ActiveSwapTrackingScreen(
@@ -82,48 +80,62 @@ fun ActiveSwapTrackingScreen(
     val ready = !uiState.creatingIntent && uiState.error == null && uiState.depositAddress != null
 
     HSScaffold(
-        title = "",
+        title = if (ready) "Deposit Instruction" else "Deposit Address",
         onBack = onBack,
-        // "Done" lives in the top bar; the primary action pinned to the bottom is opening a wallet.
-        menuItems = listOf(
-            MenuItem(title = TranslatableString.PlainString("Done"), onClick = onDone),
-        ),
-        bottomBar = { if (ready) BottomAction(uiState = uiState, onDone = onDone) },
+        bottomBar = {
+            if (ready) {
+                Box(
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)
+                ) {
+                    ButtonPrimaryYellow(
+                        modifier = Modifier.fillMaxWidth(),
+                        title = "Go to Main",
+                        onClick = onDone,
+                    )
+                }
+            }
+        },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        ) {
-            when {
-                uiState.error != null -> Centered {
-                    VSpacer(48.dp)
-                    Text(
-                        text = uiState.error,
-                        style = ComposeAppTheme.typography.subhead,
-                        color = ComposeAppTheme.colors.lucian,
-                        textAlign = TextAlign.Center,
-                    )
-                    VSpacer(16.dp)
-                    ButtonPrimaryYellow(title = "Try again", onClick = onRetry)
-                }
+        when {
+            uiState.error != null -> Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                VSpacer(48.dp)
+                Text(
+                    text = uiState.error,
+                    style = ComposeAppTheme.typography.subhead,
+                    color = ComposeAppTheme.colors.lucian,
+                    textAlign = TextAlign.Center,
+                )
+                VSpacer(16.dp)
+                ButtonPrimaryYellow(title = "Try again", onClick = onRetry)
+            }
 
-                uiState.creatingIntent || uiState.depositAddress == null -> Centered {
-                    VSpacer(64.dp)
-                    CircularProgressIndicator(color = ComposeAppTheme.colors.jacob)
-                    VSpacer(16.dp)
-                    Text(
-                        text = "Creating your swap…",
-                        style = ComposeAppTheme.typography.subhead,
-                        color = ComposeAppTheme.colors.grey,
-                    )
-                }
+            !ready -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = ComposeAppTheme.colors.jacob)
+            }
 
-                else -> SwapDetails(
+            else -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            ) {
+                DepositInstructions(
                     uiState = uiState,
-                    onCopyAddress = { uiState.depositAddress?.let(copyToClipboard) },
-                    onCopyAttachment = { uiState.attachmentValue?.let(copyToClipboard) },
+                    onCopy = copyToClipboard,
+                    onOpenLink = { url ->
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                        } catch (e: ActivityNotFoundException) {
+                            Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                 )
             }
         }
@@ -131,364 +143,327 @@ fun ActiveSwapTrackingScreen(
 }
 
 @Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        content = { content() },
-    )
-}
-
-@Composable
-private fun SwapDetails(
+private fun DepositInstructions(
     uiState: ActiveSwapUiState,
-    onCopyAddress: () -> Unit,
-    onCopyAttachment: () -> Unit,
+    onCopy: (String) -> Unit,
+    onOpenLink: (String) -> Unit,
 ) {
     val depositAddress = uiState.depositAddress ?: return
 
-    VSpacer(8.dp)
+    VSpacer(12.dp)
+    SwapHeader(uiState)
 
-    // "Send exactly" + the exact amount, headlined so the send value can't be missed.
-    Text(
-        text = "Send exactly",
-        style = ComposeAppTheme.typography.headline1,
-        color = ComposeAppTheme.colors.grey,
-    )
-    VSpacer(8.dp)
-    Row(modifier = Modifier.fillMaxWidth()) {
-        // The number auto-shrinks to fit the space left by the token code, so long amounts
-        // (e.g. 0.036016087) never push the code off-screen.
-        BasicText(
-            text = formatAmount(uiState.amountIn),
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .alignByBaseline(),
-            style = TextStyle(
-                fontFamily = manropeFont,
-                fontWeight = FontWeight.Bold,
-                color = ComposeAppTheme.colors.leah,
-            ),
-            maxLines = 1,
-            autoSize = TextAutoSize.StepBased(minFontSize = 22.sp, maxFontSize = 52.sp, stepSize = 2.sp),
-        )
-        HSpacer(10.dp)
-        Text(
-            text = uiState.tokenInCode,
-            style = TextStyle(fontFamily = manropeFont, fontWeight = FontWeight.SemiBold, fontSize = 30.sp),
-            color = ComposeAppTheme.colors.grey,
-            modifier = Modifier.alignByBaseline(),
-        )
+    statusBanner(uiState)?.let { (message, color) ->
+        VSpacer(16.dp)
+        Text(text = message, style = ComposeAppTheme.typography.subhead, color = color)
     }
 
+    if (uiState.expiresAtMillis != null && !uiState.status.isTerminal) {
+        VSpacer(20.dp)
+        ExpirationCard(expiresAtMillis = uiState.expiresAtMillis)
+    }
+
+    var step = 1
+
     VSpacer(20.dp)
-    RouteRow(uiState)
-
-    VSpacer(24.dp)
-
-    // QR encodes the BIP21 payment URI (address + exact amount) when available, so a wallet scan
-    // pre-fills everything; otherwise the bare address.
-    val qrContent = uiState.paymentUri ?: depositAddress
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    StepCard(
+        number = step++,
+        text = "Copy the address and paste it on another wallet from which you are going to send funds",
     ) {
-        // White card that wraps the QR tightly; the caption sits below it on the page background.
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color.White)
-                .padding(18.dp)
-        ) {
-            QrCode(content = qrContent, modifier = Modifier.size(190.dp))
-        }
-        VSpacer(12.dp)
-        Text(
-            text = "Scan to pay from your wallet",
-            style = ComposeAppTheme.typography.subhead,
-            color = ComposeAppTheme.colors.grey,
+        var showQr by remember { mutableStateOf(false) }
+        StepPill(
+            text = middleTruncate(depositAddress, edge = 6),
+            icon = R.drawable.copy_20,
+            onClick = { onCopy(depositAddress) },
         )
-    }
-
-    VSpacer(20.dp)
-
-    // Deposit address card: label + truncated address on the left, a "Copy" pill on the right.
-    DepositAddressCard(address = depositAddress, onCopy = onCopyAddress)
-
-    // Attachment (destination tag / memo) — required for some chains; the send is lost without it.
-    uiState.attachmentValue?.let { attachment ->
-        val label = uiState.attachmentLabel ?: "Memo"
-        VSpacer(12.dp)
-        CopyableField(
-            label = "${label.uppercase()} — REQUIRED",
-            value = attachment,
-            onCopy = onCopyAttachment,
-            labelColor = ComposeAppTheme.colors.lucian,
-            footnote = "You must include this ${label.lowercase()} in the transaction or the funds will be lost.",
-        )
-    }
-
-    VSpacer(28.dp)
-
-    // Live status.
-    when {
-        uiState.failed -> {
-            Text(
-                text = if (uiState.status == SwapStatus.Refunded) {
-                    "Swap failed — your funds were refunded."
-                } else {
-                    "Swap failed."
-                },
-                style = ComposeAppTheme.typography.headline2,
-                color = ComposeAppTheme.colors.lucian,
+        StepPill(icon = R.drawable.ic_qr_scan_20, onClick = { showQr = true })
+        if (showQr) {
+            QrDialog(
+                content = uiState.paymentUri ?: depositAddress,
+                caption = middleTruncate(depositAddress),
+                onDismiss = { showQr = false },
             )
         }
+    }
 
-        else -> {
-            // Vertical status tracker, driven by the live POST /v2/track status.
-            Column(modifier = Modifier.fillMaxWidth()) {
-                trackerStages.forEachIndexed { index, stage ->
-                    TrackerStep(
-                        stage = stage,
-                        state = stepState(index, uiState.status),
-                        isLast = index == trackerStages.lastIndex,
-                    )
-                }
-            }
+    // Destination tag / memo — required by some chains; the deposit is lost without it.
+    uiState.attachmentValue?.let { attachment ->
+        val label = (uiState.attachmentLabel ?: "Memo").lowercase()
+        VSpacer(12.dp)
+        StepCard(
+            number = step++,
+            text = "Copy the $label and include it in the transaction, otherwise the funds will be lost",
+        ) {
+            StepPill(text = attachment, icon = R.drawable.copy_20, onClick = { onCopy(attachment) })
+        }
+    }
 
-            if (uiState.status == SwapStatus.ActionRequired) {
-                VSpacer(12.dp)
-                Text(
-                    text = actionRequiredMessage(uiState.pauseReason),
-                    style = ComposeAppTheme.typography.subhead,
-                    color = ComposeAppTheme.colors.lucian,
+    val exactAmount = formatAmount(uiState.amountIn)
+    VSpacer(12.dp)
+    StepCard(number = step++, text = "Copy the amount you need to send") {
+        StepPill(text = exactAmount, icon = R.drawable.copy_20, onClick = { onCopy(exactAmount) })
+    }
+
+    uiState.trackUrl?.let { trackUrl ->
+        VSpacer(12.dp)
+        StepCard(number = step, text = "Send and track the transaction progress via the link") {
+            StepPill(text = "Link", icon = R.drawable.copy_20, onClick = { onCopy(trackUrl) })
+            StepPill(text = "Go to Link", icon = R.drawable.ic_globe_20, onClick = { onOpenLink(trackUrl) })
+        }
+    }
+
+    VSpacer(24.dp)
+}
+
+/** Terminal/paused states still deserve a word now that the step tracker is gone. */
+@Composable
+private fun statusBanner(uiState: ActiveSwapUiState): Pair<String, Color>? = when {
+    uiState.completed -> "Completed — your funds are on the way." to ComposeAppTheme.colors.remus
+    uiState.status == SwapStatus.Refunded ->
+        "Swap failed — your funds were refunded." to ComposeAppTheme.colors.lucian
+    uiState.status == SwapStatus.Failed -> "Swap failed." to ComposeAppTheme.colors.lucian
+    uiState.status == SwapStatus.ActionRequired ->
+        actionRequiredMessage(uiState.pauseReason) to ComposeAppTheme.colors.lucian
+    else -> null
+}
+
+/** From-token → to-token. A spinner circles the (dimmed) sell token while its deposit is awaited. */
+@Composable
+private fun SwapHeader(uiState: ActiveSwapUiState) {
+    // Until the deposit is seen on-chain the left icon is dimmed with a spinner around it.
+    val awaitingDeposit = !uiState.status.isTerminal && uiState.status.stageIndex == 0
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+            CoinImage(
+                url = uiState.tokenInLogo,
+                modifier = Modifier
+                    .size(40.dp)
+                    .alpha(if (awaitingDeposit) 0.35f else 1f),
+            )
+            if (awaitingDeposit) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(44.dp),
+                    color = ComposeAppTheme.colors.jacob,
+                    strokeWidth = 2.dp,
                 )
             }
         }
-    }
-
-    VSpacer(24.dp)
-}
-
-/** From-token chip → dashed connector labelled with the provider → to-token chip. */
-@Composable
-private fun RouteRow(uiState: ActiveSwapUiState) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TokenChip(logo = uiState.tokenInLogo, code = uiState.tokenInCode, network = uiState.tokenInNetwork)
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = uiState.providerTitle.uppercase(),
-                style = ComposeAppTheme.typography.captionSB.copy(letterSpacing = 0.8.sp),
-                color = ComposeAppTheme.colors.jacob,
-                textAlign = TextAlign.Center,
-            )
-            VSpacer(6.dp)
-            DashedArrow(modifier = Modifier.fillMaxWidth())
-        }
-        TokenChip(logo = uiState.tokenOutLogo, code = uiState.tokenOutCode, network = uiState.tokenOutNetwork)
-    }
-}
-
-@Composable
-private fun TokenChip(logo: String?, code: String, network: String) {
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .border(BorderStroke(1.dp, ComposeAppTheme.colors.blade), CircleShape)
-            .padding(start = 6.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CoinImage(url = logo, modifier = Modifier.size(32.dp))
-        HSpacer(8.dp)
+        HSpacer(12.dp)
         Column {
-            Text(code, style = ComposeAppTheme.typography.headline2, color = ComposeAppTheme.colors.leah)
-            Text(network, style = ComposeAppTheme.typography.caption, color = ComposeAppTheme.colors.grey)
-        }
-    }
-}
-
-@Composable
-private fun DashedArrow(modifier: Modifier = Modifier) {
-    val color = ComposeAppTheme.colors.blade
-    Canvas(modifier = modifier.height(10.dp)) {
-        val y = size.height / 2f
-        val end = size.width
-        val stroke = 2.dp.toPx()
-        drawLine(
-            color = color,
-            start = Offset(0f, y),
-            end = Offset(end - 6f, y),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round,
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
-        )
-        val head = 5.dp.toPx()
-        drawLine(color, Offset(end - head, y - head), Offset(end, y), stroke, StrokeCap.Round)
-        drawLine(color, Offset(end - head, y + head), Offset(end, y), stroke, StrokeCap.Round)
-    }
-}
-
-/** Deposit address in a compact card with a middle-truncated value and a "Copy" pill. */
-@Composable
-private fun DepositAddressCard(address: String, onCopy: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(ComposeAppTheme.colors.blade)
-            .padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "DEPOSIT ADDRESS",
-                style = ComposeAppTheme.typography.captionSB.copy(letterSpacing = 1.sp),
-                color = ComposeAppTheme.colors.grey,
-            )
-            VSpacer(6.dp)
-            Text(
-                text = middleTruncate(address),
-                style = ComposeAppTheme.typography.body.copy(fontFamily = FontFamily.Monospace),
+                text = uiState.tokenInCode,
+                style = ComposeAppTheme.typography.headline2,
                 color = ComposeAppTheme.colors.leah,
             )
+            Text(
+                text = uiState.tokenInNetwork,
+                style = ComposeAppTheme.typography.subhead,
+                color = ComposeAppTheme.colors.grey,
+            )
+        }
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(R.drawable.arrow_m_left_24),
+                contentDescription = null,
+                tint = ComposeAppTheme.colors.grey,
+                // The only arrow asset points left; mirror it to point at the buy token.
+                modifier = Modifier
+                    .size(24.dp)
+                    .graphicsLayer(scaleX = -1f),
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            val amountOut = uiState.amountOut
+            Text(
+                text = if (amountOut != null) {
+                    "${formatCoinAmount(amountOut, maxDecimals = 8)} ${uiState.tokenOutCode}"
+                } else {
+                    uiState.tokenOutCode
+                },
+                style = ComposeAppTheme.typography.headline2,
+                color = ComposeAppTheme.colors.leah,
+            )
+            uiState.fiatOut?.let {
+                Text(
+                    text = formatFiat(it),
+                    style = ComposeAppTheme.typography.subhead,
+                    color = ComposeAppTheme.colors.grey,
+                )
+            }
         }
         HSpacer(12.dp)
-        Row(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(ComposeAppTheme.colors.lawrence)
-                .clickable(onClick = onCopy)
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        CoinImage(url = uiState.tokenOutLogo, modifier = Modifier.size(40.dp))
+    }
+}
+
+/** Orange-bordered warning card with a live "Expire in" countdown. */
+@Composable
+private fun ExpirationCard(expiresAtMillis: Long) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(expiresAtMillis) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    val remainingMillis = expiresAtMillis - now
+    val expired = remainingMillis <= 0
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(BorderStroke(1.dp, ComposeAppTheme.colors.jacob), RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                painter = painterResource(R.drawable.copy_20),
+                painter = painterResource(R.drawable.ic_attention_20),
                 contentDescription = null,
-                tint = ComposeAppTheme.colors.leah,
-                modifier = Modifier.size(18.dp),
+                tint = ComposeAppTheme.colors.jacob,
+                modifier = Modifier.size(20.dp),
             )
             HSpacer(8.dp)
-            Text("Copy", style = ComposeAppTheme.typography.headline2, color = ComposeAppTheme.colors.leah)
+            Text(
+                text = "Attention!",
+                style = ComposeAppTheme.typography.headline2,
+                color = ComposeAppTheme.colors.jacob,
+            )
+        }
+        VSpacer(8.dp)
+        Text(
+            text = "If the transaction is not received during this time, the deposit will not be made.",
+            style = ComposeAppTheme.typography.subhead,
+            color = ComposeAppTheme.colors.leah,
+        )
+        VSpacer(12.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Expire in:",
+                style = ComposeAppTheme.typography.subhead,
+                color = ComposeAppTheme.colors.grey,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                painter = painterResource(R.drawable.clock_24),
+                contentDescription = null,
+                tint = if (expired) ComposeAppTheme.colors.lucian else ComposeAppTheme.colors.leah,
+                modifier = Modifier.size(20.dp),
+            )
+            HSpacer(6.dp)
+            Text(
+                text = if (expired) "Expired" else formatRemaining(remainingMillis),
+                style = ComposeAppTheme.typography.headline1,
+                color = if (expired) ComposeAppTheme.colors.lucian else ComposeAppTheme.colors.leah,
+            )
         }
     }
 }
 
-/** Card with an uppercase section header, a tappable "Copy" action, and the value in an inset box. */
+/** Ticking countdown: `2h 03m 45s` above an hour, `3m 45s` below it, `45s` in the last minute. */
+private fun formatRemaining(millis: Long): String {
+    val totalSeconds = (millis + 999) / 1_000 // round up so it never reads 0s while time is left
+    val hours = totalSeconds / 3_600
+    val minutes = totalSeconds % 3_600 / 60
+    val seconds = totalSeconds % 60
+    return when {
+        hours > 0 -> "${hours}h ${"%02d".format(minutes)}m ${"%02d".format(seconds)}s"
+        minutes > 0 -> "${minutes}m ${"%02d".format(seconds)}s"
+        else -> "${seconds}s"
+    }
+}
+
+/** Numbered instruction card: orange number badge + text, action pills beneath the text. */
 @Composable
-private fun CopyableField(
-    label: String,
-    value: String,
-    onCopy: () -> Unit,
-    labelColor: Color = ComposeAppTheme.colors.grey,
-    footnote: String? = null,
+private fun StepCard(
+    number: Int,
+    text: String,
+    actions: @Composable () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(ComposeAppTheme.colors.lawrence)
-            .padding(20.dp)
+            .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(ComposeAppTheme.colors.jacob),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = number.toString(),
+                    style = ComposeAppTheme.typography.subheadSB,
+                    color = ComposeAppTheme.colors.white,
+                )
+            }
+            HSpacer(12.dp)
             Text(
-                text = label,
-                style = ComposeAppTheme.typography.captionSB.copy(letterSpacing = 1.sp),
-                color = labelColor,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "Copy",
-                style = ComposeAppTheme.typography.subheadSB,
-                color = ComposeAppTheme.colors.jacob,
-                modifier = Modifier.clickable(onClick = onCopy),
+                text = text,
+                style = ComposeAppTheme.typography.subhead,
+                color = ComposeAppTheme.colors.leah,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = 4.dp),
             )
         }
         VSpacer(12.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(ComposeAppTheme.colors.blade)
-                .clickable(onClick = onCopy)
-                .padding(14.dp)
+        Row(
+            modifier = Modifier.padding(start = 40.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = value,
-                style = ComposeAppTheme.typography.subhead,
-                color = ComposeAppTheme.colors.leah,
-            )
-        }
-        footnote?.let {
-            VSpacer(8.dp)
-            Text(
-                text = it,
-                style = ComposeAppTheme.typography.caption,
-                color = ComposeAppTheme.colors.grey,
-            )
+            actions()
         }
     }
 }
 
-/** Pinned bottom action: open a wallet app while awaiting the deposit, else a plain "Done". */
+/** Grey pill button: an icon with (optionally) a label, used for the step actions. */
 @Composable
-private fun BottomAction(uiState: ActiveSwapUiState, onDone: () -> Unit) {
-    val context = LocalContext.current
-    val deeplink = uiState.deeplink
-    Box(
-        modifier = Modifier
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)
-    ) {
-        if (deeplink != null && !uiState.status.isTerminal) {
-            ButtonPrimaryYellow(
-                modifier = Modifier.fillMaxWidth(),
-                title = "Open in wallet app",
-                onClick = {
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, deeplink.toUri()))
-                    } catch (e: ActivityNotFoundException) {
-                        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
-                    }
-                },
-            )
-        } else {
-            ButtonPrimaryYellow(
-                modifier = Modifier.fillMaxWidth(),
-                title = "Done",
-                onClick = onDone,
-            )
+private fun StepPill(
+    onClick: () -> Unit,
+    icon: Int,
+    text: String? = null,
+) {
+    ButtonSecondary(onClick = onClick, shape = RoundedCornerShape(16.dp)) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = ComposeAppTheme.colors.leah,
+            modifier = Modifier.size(16.dp),
+        )
+        text?.let {
+            HSpacer(6.dp)
+            Text(it, maxLines = 1)
         }
     }
 }
 
-private data class TrackerStage(val label: String, val activeSubtitle: String)
-
-/** Ordered tracker rows, aligned index-for-index with [SwapStatus.stages]. */
-private val trackerStages = listOf(
-    TrackerStage("Awaiting deposit", "Send the exact amount above"),
-    TrackerStage("Confirming deposit", "Waiting for network confirmations"),
-    TrackerStage("Exchanging", "Swapping to your destination token"),
-    TrackerStage("Completed", "Your funds are on the way"),
-)
-
-private enum class StepState { Done, Active, Pending }
-
-/** Step [index] state given the current [status]'s position in [SwapStatus.stages]. */
-private fun stepState(index: Int, status: SwapStatus): StepState {
-    val current = status.stageIndex
-    return when {
-        index < current -> StepState.Done
-        index > current -> StepState.Pending
-        status == SwapStatus.Completed -> StepState.Done // last stage reached
-        else -> StepState.Active
+/** The deposit QR (BIP21 payment URI when available) on a white card for scan contrast. */
+@Composable
+private fun QrDialog(content: String, caption: String, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.White)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            QrCode(content = content, modifier = Modifier.size(220.dp))
+            VSpacer(16.dp)
+            Text(
+                text = caption,
+                style = ComposeAppTheme.typography.subhead.copy(fontFamily = FontFamily.Monospace),
+                color = ComposeAppTheme.colors.dark,
+            )
+        }
     }
 }
 
@@ -505,114 +480,9 @@ private fun actionRequiredMessage(pauseReason: String?): String {
     return "$detail Please contact the provider to resolve it."
 }
 
-@Composable
-private fun TrackerStep(
-    stage: TrackerStage,
-    state: StepState,
-    isLast: Boolean,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-    ) {
-        // Indicator column with a connector line down to the next step.
-        Column(
-            modifier = Modifier.fillMaxHeight(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            StepIndicator(state)
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .weight(1f)
-                        .background(
-                            if (state == StepState.Done) ComposeAppTheme.colors.jacob
-                            else ComposeAppTheme.colors.blade
-                        )
-                )
-            }
-        }
-        HSpacer(14.dp)
-        Column(
-            modifier = Modifier.padding(bottom = if (isLast) 0.dp else 22.dp)
-        ) {
-            Text(
-                text = stage.label,
-                style = ComposeAppTheme.typography.headline2,
-                color = when (state) {
-                    StepState.Done -> ComposeAppTheme.colors.leah
-                    StepState.Active -> ComposeAppTheme.colors.leah
-                    StepState.Pending -> ComposeAppTheme.colors.grey
-                },
-            )
-            if (state == StepState.Active) {
-                VSpacer(2.dp)
-                Text(
-                    text = stage.activeSubtitle,
-                    style = ComposeAppTheme.typography.caption,
-                    color = ComposeAppTheme.colors.grey,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StepIndicator(state: StepState) {
-    Box(
-        modifier = Modifier.size(32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        when (state) {
-            StepState.Done -> Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(ComposeAppTheme.colors.jacob),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("✓", color = ComposeAppTheme.colors.white, style = ComposeAppTheme.typography.captionSB)
-            }
-
-            // Solid dot inside a filled circle with a soft halo — the "you are here" marker.
-            StepState.Active -> {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(ComposeAppTheme.colors.jacob.copy(alpha = 0.2f))
-                )
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(ComposeAppTheme.colors.jacob),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(ComposeAppTheme.colors.white)
-                    )
-                }
-            }
-
-            StepState.Pending -> Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .border(BorderStroke(1.5.dp, ComposeAppTheme.colors.blade), CircleShape)
-            )
-        }
-    }
-}
-
 private fun formatAmount(value: BigDecimal): String =
     value.stripTrailingZeros().toPlainString()
 
-/** First/last 8 chars with an ellipsis, e.g. `TB6nu9QF…YzdhWHWC`. */
+/** First/last [edge] chars with an ellipsis, e.g. `TB6nu9QF…YzdhWHWC`. */
 private fun middleTruncate(value: String, edge: Int = 8): String =
     if (value.length <= edge * 2 + 1) value else "${value.take(edge)}…${value.takeLast(edge)}"

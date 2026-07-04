@@ -9,14 +9,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.CircularProgressIndicator
@@ -30,27 +31,33 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
+import io.horizontalsystems.swapapp.components.cell.CellMiddleInfo
+import io.horizontalsystems.swapapp.components.cell.CellMiddleInfoTextIcon
+import io.horizontalsystems.swapapp.components.cell.CellPrimary
+import io.horizontalsystems.swapapp.components.cell.CellRightInfo
+import io.horizontalsystems.swapapp.components.cell.CellRightInfoTextIcon
+import io.horizontalsystems.swapapp.components.cell.CellRightNavigation
+import io.horizontalsystems.swapapp.components.cell.CellSecondary
+import io.horizontalsystems.swapapp.components.cell.hs
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
-import io.horizontalsystems.swapapp.compose.components.CoinImage
-import io.horizontalsystems.swapapp.compose.components.HSpacer
+import io.horizontalsystems.swapapp.compose.components.HsDivider
+import io.horizontalsystems.swapapp.compose.components.HsImageCircle
 import io.horizontalsystems.swapapp.compose.components.VSpacer
+import io.horizontalsystems.swapapp.compose.components.subheadSB_grey
 import io.horizontalsystems.swapapp.swap.execution.SwapLeg
 import io.horizontalsystems.swapapp.swap.execution.SwapStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** The three visible stages of a swap, shown in the "Transaction Status" tracker. */
-private val TRANSACTION_STEPS = listOf("Depositing", "Swap", "Send")
-
 /**
- * Detail view for a single recorded swap: the paid → received pair, when it happened, and a live
- * transaction-status tracker (Depositing → Swap → Send) driven by [SwapInfoViewModel].
+ * Detail view for a single recorded swap: the paid → received pair, route/date details, and a live
+ * transaction-status tracker (Depositing → Swap → Send) driven by [SwapInfoViewModel]. Ported 1:1
+ * from walletkit's `multiswap.history.SwapInfoPage`.
  */
 @Composable
 fun SwapInfoScreen(
@@ -58,6 +65,7 @@ fun SwapInfoScreen(
     onBack: () -> Unit,
 ) {
     val record = uiState.record
+    val leah = ComposeAppTheme.colors.leah
 
     HSScaffold(title = "Swap Info", onBack = onBack) {
         if (record == null) {
@@ -75,282 +83,311 @@ fun SwapInfoScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .verticalScroll(rememberScrollState()),
         ) {
-            SwapPairCard(record)
-            VSpacer(16.dp)
-            DateCard(record.createdAt)
-            VSpacer(24.dp)
+            VSpacer(12.dp)
 
-            Text(
-                text = "Transaction Status",
-                style = ComposeAppTheme.typography.subhead,
-                color = ComposeAppTheme.colors.grey,
-                modifier = Modifier.padding(start = 16.dp),
-            )
-            VSpacer(8.dp)
-            TransactionStatusCard(status = uiState.status, legs = uiState.legs)
-            VSpacer(24.dp)
-        }
-    }
-}
-
-@Composable
-private fun SwapPairCard(record: SwapRecord) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(ComposeAppTheme.colors.lawrence),
-    ) {
-        TokenRow(
-            token = record.tokenIn,
-            amount = record.amountIn,
-            fiat = record.fiatIn,
-        )
-        Box(contentAlignment = Alignment.Center) {
-            androidx.compose.material.Divider(
-                thickness = 0.5.dp,
-                color = ComposeAppTheme.colors.blade,
-            )
+            // Token pair card
             Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(ComposeAppTheme.colors.lawrence),
                 contentAlignment = Alignment.Center,
             ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(ComposeAppTheme.colors.lawrence),
+                ) {
+                    CellPrimary(
+                        left = {
+                            HsImageCircle(
+                                modifier = Modifier.size(32.dp),
+                                url = record.tokenIn.logoUrl,
+                                placeholder = R.drawable.coin_placeholder,
+                            )
+                        },
+                        middle = {
+                            CellMiddleInfo(
+                                title = record.tokenIn.ticker.hs,
+                                subtitle = record.tokenIn.network.hs,
+                            )
+                        },
+                        right = {
+                            CellRightInfo(
+                                titleSubheadSb = record.amountIn.hs,
+                                subtitle = record.fiatIn?.hs,
+                            )
+                        },
+                    )
+                    CellPrimary(
+                        left = {
+                            HsImageCircle(
+                                modifier = Modifier.size(32.dp),
+                                url = record.tokenOut.logoUrl,
+                                placeholder = R.drawable.coin_placeholder,
+                            )
+                        },
+                        middle = {
+                            CellMiddleInfo(
+                                title = record.tokenOut.ticker.hs,
+                                subtitle = record.tokenOut.network.hs,
+                            )
+                        },
+                        right = {
+                            CellRightInfo(
+                                titleSubheadSb = (record.amountOut ?: "---").hs,
+                                subtitle = record.fiatOut?.hs,
+                            )
+                        },
+                    )
+                }
+                HsDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
                 Icon(
-                    painter = painterResource(R.drawable.arrow_down_24),
-                    contentDescription = null,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .background(ComposeAppTheme.colors.lawrence),
+                    painter = painterResource(R.drawable.ic_arrow_down_20),
                     tint = ComposeAppTheme.colors.grey,
-                    modifier = Modifier.size(18.dp),
+                    contentDescription = null,
                 )
             }
+
+            VSpacer(16.dp)
+
+            // Details card
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(ComposeAppTheme.colors.lawrence)
+                    .padding(vertical = 8.dp),
+            ) {
+                // Provider
+                CellSecondary(
+                    middle = {
+                        CellMiddleInfoTextIcon(text = "Route".hs)
+                    },
+                    right = {
+                        CellRightInfoTextIcon(text = record.providerTitle.hs(color = leah))
+                    },
+                )
+                // Date
+                CellSecondary(
+                    middle = {
+                        CellMiddleInfoTextIcon(text = "Date".hs)
+                    },
+                    right = {
+                        CellRightInfoTextIcon(
+                            text = SimpleDateFormat("MMM d, yyyy, HH:mm", Locale.getDefault())
+                                .format(Date(record.createdAt))
+                                .hs(color = leah)
+                        )
+                    },
+                )
+            }
+
+            VSpacer(24.dp)
+
+            subheadSB_grey(
+                text = "Transaction Status",
+                modifier = Modifier.padding(horizontal = 32.dp),
+            )
+
+            VSpacer(12.dp)
+
+            SwapStatusSteps(
+                status = uiState.status,
+                legs = uiState.legs,
+            )
+
+            VSpacer(32.dp)
         }
-        TokenRow(
-            token = record.tokenOut,
-            amount = record.amountOut ?: "—",
-            fiat = record.fiatOut,
-        )
     }
 }
 
 @Composable
-private fun TokenRow(token: RecordToken, amount: String, fiat: String?) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CoinImage(url = token.logoUrl, modifier = Modifier.size(32.dp))
-        HSpacer(12.dp)
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = token.ticker,
-                style = ComposeAppTheme.typography.headline2,
-                color = ComposeAppTheme.colors.leah,
-            )
-            Text(
-                text = token.network,
-                style = ComposeAppTheme.typography.subhead,
-                color = ComposeAppTheme.colors.grey,
-            )
+private fun SwapStatusSteps(status: SwapStatus, legs: List<SwapLeg>) {
+    val context = LocalContext.current
+    val normalSteps = listOf("Depositing", "Swap", "Send")
+    val refundedSteps = listOf("Depositing", "Swap", "Refunded")
+
+    val steps: List<String>
+    val activeIndex: Int
+    val failedIndex: Int?
+
+    when (status) {
+        SwapStatus.Refunded -> {
+            steps = refundedSteps
+            activeIndex = steps.size
+            failedIndex = null
         }
-        HSpacer(12.dp)
-        Column(
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = amount,
-                style = ComposeAppTheme.typography.headline2,
-                color = ComposeAppTheme.colors.leah,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = fiat ?: "—",
-                style = ComposeAppTheme.typography.subhead,
-                color = ComposeAppTheme.colors.grey,
-            )
+
+        SwapStatus.Failed,
+        SwapStatus.ActionRequired -> {
+            steps = normalSteps.take(2)
+            activeIndex = 1
+            failedIndex = 1
+        }
+
+        SwapStatus.NotStarted,
+        SwapStatus.Pending,
+        SwapStatus.Unknown -> {
+            steps = normalSteps
+            activeIndex = 0
+            failedIndex = null
+        }
+
+        SwapStatus.Swapping -> {
+            steps = normalSteps
+            activeIndex = 1
+            failedIndex = null
+        }
+
+        SwapStatus.Completed -> {
+            steps = normalSteps
+            activeIndex = steps.size
+            failedIndex = null
         }
     }
-}
 
-@Composable
-private fun DateCard(createdAt: Long) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(ComposeAppTheme.colors.lawrence)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Date",
-            style = ComposeAppTheme.typography.subhead,
-            color = ComposeAppTheme.colors.grey,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = SimpleDateFormat("MMM dd, yyyy, HH:mm", Locale.getDefault()).format(Date(createdAt)),
-            style = ComposeAppTheme.typography.headline2,
-            color = ComposeAppTheme.colors.leah,
-        )
-    }
-}
+    val green = ComposeAppTheme.colors.remus
+    val blade = ComposeAppTheme.colors.blade
 
-private enum class StepState { Done, Active, Pending }
-
-@Composable
-private fun TransactionStatusCard(status: SwapStatus, legs: List<SwapLeg>) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(ComposeAppTheme.colors.lawrence)
-            .padding(16.dp),
+            .padding(vertical = 8.dp)
     ) {
-        if (status == SwapStatus.Refunded || status == SwapStatus.Failed) {
-            Text(
-                text = if (status == SwapStatus.Refunded) "Swap failed — your funds were refunded."
-                else "Swap failed.",
-                style = ComposeAppTheme.typography.subhead,
-                color = ComposeAppTheme.colors.lucian,
-            )
-            VSpacer(12.dp)
-        }
-
-        TRANSACTION_STEPS.forEachIndexed { index, label ->
-            StatusStep(
-                label = label,
-                state = stepState(index, status),
-                explorerUrl = legs.getOrNull(index)?.let { explorerUrl(it.chainId, it.hash) },
-                isLast = index == TRANSACTION_STEPS.lastIndex,
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatusStep(
-    label: String,
-    state: StepState,
-    explorerUrl: String?,
-    isLast: Boolean,
-) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            StepIndicator(state)
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .height(28.dp)
-                        .background(
-                            if (state == StepState.Done) ComposeAppTheme.colors.remus
-                            else ComposeAppTheme.colors.blade
-                        )
-                )
+        steps.forEachIndexed { index, label ->
+            val isFailed = failedIndex == index
+            val isDone = activeIndex > index
+            val isActive = activeIndex == index && !isFailed
+            val isFirst = index == 0
+            val isLast = index == steps.lastIndex
+            val stepUrl: String? = when (index) {
+                0 -> legs.getOrNull(0)?.let { explorerUrl(it.chainId, it.hash) }
+                1 if steps.size > 2 -> legs.getOrNull(1)?.let { explorerUrl(it.chainId, it.hash) }
+                2 if steps.size == 3 -> legs.getOrNull(2)?.let { explorerUrl(it.chainId, it.hash) }
+                else -> null
             }
-        }
-        HSpacer(12.dp)
-        Text(
-            text = label,
-            style = ComposeAppTheme.typography.headline2,
-            color = when (state) {
-                StepState.Done -> ComposeAppTheme.colors.leah
-                StepState.Active -> ComposeAppTheme.colors.jacob
-                StepState.Pending -> ComposeAppTheme.colors.grey
-            },
-            modifier = Modifier
-                .weight(1f)
-                .padding(top = 1.dp),
-        )
-        if (explorerUrl != null) {
-            val context = LocalContext.current
+            val showView = stepUrl != null && (isDone || isActive || isFailed)
+            val isPrevDone = index > 0 && activeIndex >= index
+            val topConnectorColor = if (isPrevDone) green else blade
+            val bottomConnectorColor = if (isDone) green else blade
+
             Row(
-                modifier = Modifier.clickable {
-                    try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, explorerUrl.toUri()))
-                    } catch (e: ActivityNotFoundException) {
-                        Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
-                    }
-                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .then(if (showView) Modifier.clickable {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, stepUrl.toUri()))
+                        } catch (e: ActivityNotFoundException) {
+                            Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+                        }
+                    } else Modifier)
+                    .padding(end = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "View",
-                    style = ComposeAppTheme.typography.subhead,
-                    color = ComposeAppTheme.colors.grey,
-                )
-                Icon(
-                    painter = painterResource(R.drawable.chevron_right_20),
-                    contentDescription = null,
-                    tint = ComposeAppTheme.colors.grey,
-                    modifier = Modifier.size(20.dp),
-                )
+                // Left: connector lines + step indicator
+                Column(
+                    modifier = Modifier
+                        .padding(start = 16.dp)
+                        .fillMaxHeight(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .weight(1f)
+                            .background(if (isFirst) Color.Transparent else topConnectorColor)
+                    )
+                    StepIndicator(isActive = isActive, isDone = isDone, isFailed = isFailed)
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .weight(1f)
+                            .background(if (isLast) Color.Transparent else bottomConnectorColor)
+                    )
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    CellMiddleInfoTextIcon(
+                        text = label.hs(
+                            color = if (isActive || isDone || isFailed) ComposeAppTheme.colors.leah else null
+                        )
+                    )
+                }
+
+                if (showView) {
+                    Box(
+                        modifier = Modifier.widthIn(max = 200.dp),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        CellRightNavigation(subtitle = "View".hs)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun StepIndicator(state: StepState) {
-    Box(
-        modifier = Modifier.size(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        when (state) {
-            StepState.Done -> Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(ComposeAppTheme.colors.remus),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("✓", color = ComposeAppTheme.colors.white, style = ComposeAppTheme.typography.captionSB)
-            }
-
-            StepState.Active -> CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                color = ComposeAppTheme.colors.jacob,
+private fun StepIndicator(isActive: Boolean, isDone: Boolean, isFailed: Boolean = false) {
+    when {
+        isActive -> Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                modifier = Modifier.size(20.dp),
+                painter = painterResource(R.drawable.ic_circle_placeholder_20),
+                tint = ComposeAppTheme.colors.blade,
+                contentDescription = null,
+            )
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = ComposeAppTheme.colors.leah,
+                backgroundColor = Color.Transparent,
                 strokeWidth = 2.dp,
             )
+        }
 
-            StepState.Pending -> Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(ComposeAppTheme.colors.blade)
+        isFailed -> Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                modifier = Modifier.size(20.dp),
+                painter = painterResource(R.drawable.ic_circle_placeholder_20),
+                tint = ComposeAppTheme.colors.blade,
+                contentDescription = null,
+            )
+            Icon(
+                modifier = Modifier.size(11.dp),
+                painter = painterResource(R.drawable.ic_failed_cross),
+                tint = ComposeAppTheme.colors.lucian,
+                contentDescription = null,
             )
         }
-    }
-}
 
-/**
- * Step [index] (0 Depositing, 1 Swap, 2 Send) state for the current [status]. A terminal failure
- * leaves the deposit done and the rest pending (the banner above explains it).
- */
-private fun stepState(index: Int, status: SwapStatus): StepState {
-    // (fully-done count, active index or -1)
-    val (done, active) = when (status) {
-        SwapStatus.Completed -> 3 to -1
-        SwapStatus.Swapping, SwapStatus.ActionRequired -> 1 to 1
-        SwapStatus.Pending, SwapStatus.NotStarted, SwapStatus.Unknown -> 0 to 0
-        SwapStatus.Refunded, SwapStatus.Failed -> 1 to -1
-    }
-    return when {
-        index < done -> StepState.Done
-        index == active -> StepState.Active
-        else -> StepState.Pending
+        isDone -> Icon(
+            modifier = Modifier.size(20.dp),
+            painter = painterResource(R.drawable.ic_check_filled_20_no_padding),
+            tint = ComposeAppTheme.colors.remus,
+            contentDescription = null,
+        )
+
+        else -> Icon(
+            modifier = Modifier.size(20.dp),
+            painter = painterResource(R.drawable.ic_circle_placeholder_20),
+            tint = ComposeAppTheme.colors.blade,
+            contentDescription = null,
+        )
     }
 }
 
