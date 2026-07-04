@@ -1,34 +1,50 @@
 package io.horizontalsystems.swapapp.swap.history
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.Text
+import androidx.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
+import io.horizontalsystems.swapapp.components.cell.CellMiddleInfo
+import io.horizontalsystems.swapapp.components.cell.CellPrimary
+import io.horizontalsystems.swapapp.components.cell.hs
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
-import io.horizontalsystems.swapapp.compose.components.CoinImage
-import io.horizontalsystems.swapapp.compose.components.HSpacer
+import io.horizontalsystems.swapapp.compose.components.HeaderStick
 import io.horizontalsystems.swapapp.compose.components.HsDivider
+import io.horizontalsystems.swapapp.compose.components.HsImageCircle
 import io.horizontalsystems.swapapp.compose.components.VSpacer
+import io.horizontalsystems.swapapp.compose.components.body_grey
+import io.horizontalsystems.swapapp.compose.components.captionSB_grey
+import io.horizontalsystems.swapapp.compose.components.subheadSB_leah
 import io.horizontalsystems.swapapp.swap.execution.SwapStatus
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -36,9 +52,11 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Lists the user's past swaps (from [SwapHistoryStore]) newest-first, grouped by day. Each row shows
- * the paid → received amounts with a status glyph between them; tapping opens the [SwapInfoScreen].
+ * Lists the user's past swaps (from [SwapHistoryStore]) newest-first, grouped by day — a 1:1 port
+ * of the wallet's `multiswap.history.SwapHistoryPage`. Each row shows the paid → received amounts
+ * with a status icon between them; tapping opens the [SwapInfoScreen].
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SwapHistoryScreen(
     store: SwapHistoryStore,
@@ -49,152 +67,195 @@ fun SwapHistoryScreen(
 
     HSScaffold(title = "Swap History", onBack = onBack) {
         if (records.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "No swaps yet.\nYour completed swaps will appear here.",
-                    style = ComposeAppTheme.typography.subhead,
-                    color = ComposeAppTheme.colors.grey,
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                body_grey(
+                    text = "You don't have any pending or past swaps yet.",
                     textAlign = TextAlign.Center,
                 )
             }
-            return@HSScaffold
-        }
+        } else {
+            // Records are already newest-first; bucket consecutively into day groups keeping that order.
+            val groups = LinkedHashMap<String, MutableList<SwapRecord>>()
+            records.forEach { groups.getOrPut(formatDate(Date(it.createdAt))) { mutableListOf() }.add(it) }
 
-        // Records are already newest-first; bucket consecutively into day groups keeping that order.
-        val groups = LinkedHashMap<String, MutableList<SwapRecord>>()
-        records.forEach { groups.getOrPut(dayLabel(it.createdAt)) { mutableListOf() }.add(it) }
-
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            groups.forEach { (label, items) ->
-                item(key = "header-$label") {
-                    Text(
-                        text = label,
-                        style = ComposeAppTheme.typography.subhead,
-                        color = ComposeAppTheme.colors.grey,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                    // Top border for the group's first row.
-                    HsDivider()
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(ComposeAppTheme.colors.lawrence),
+            ) {
+                groups.forEach { (dateHeader, swaps) ->
+                    stickyHeader {
+                        HeaderStick(
+                            borderBottom = true,
+                            text = dateHeader.uppercase(),
+                            color = ComposeAppTheme.colors.lawrence,
+                        )
+                    }
+                    items(swaps, key = { it.uuid }) { record ->
+                        SwapHistoryCell(
+                            record = record,
+                            onClick = { onOpen(record) },
+                        )
+                    }
                 }
-                items(items, key = { it.uuid }) { record ->
-                    HistoryRow(record = record, onClick = { onOpen(record) })
-                    HsDivider()
-                }
+                item { VSpacer(32.dp) }
             }
-            item { VSpacer(24.dp) }
         }
     }
 }
 
 @Composable
-private fun HistoryRow(record: SwapRecord, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CoinImage(url = record.tokenIn.logoUrl, modifier = Modifier.size(28.dp))
-        HSpacer(10.dp)
-        AmountColumn(
-            amount = "${record.amountIn} ${record.tokenIn.ticker}",
-            fiat = record.fiatIn,
-            alignEnd = false,
-            modifier = Modifier.weight(1f),
+private fun SwapHistoryCell(record: SwapRecord, onClick: () -> Unit) {
+    val status = record.swapStatus
+    Column {
+        CellPrimary(
+            left = {
+                SwapCoinIcon(
+                    imageUrl = record.tokenIn.logoUrl,
+                    showSpinner = status.isDepositing,
+                )
+            },
+            middle = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CellMiddleInfo(
+                            subtitle = "${record.amountIn} ${record.tokenIn.ticker}".hs(ComposeAppTheme.colors.leah),
+                            description = record.fiatIn?.hs,
+                        )
+                    }
+                    val (statusIcon, statusTint) = statusIconAndTint(status)
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        painter = painterResource(statusIcon),
+                        tint = statusTint,
+                        contentDescription = null,
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End,
+                    ) {
+                        subheadSB_leah(
+                            text = record.amountOut?.let { "$it ${record.tokenOut.ticker}" } ?: "---",
+                            textAlign = TextAlign.End,
+                        )
+
+                        record.fiatOut?.let {
+                            captionSB_grey(
+                                text = it,
+                                textAlign = TextAlign.End,
+                            )
+                        }
+                    }
+                }
+            },
+            right = {
+                SwapCoinIcon(
+                    imageUrl = record.tokenOut.logoUrl,
+                    showSpinner = status == SwapStatus.Swapping,
+                )
+            },
+            onClick = onClick,
         )
-        HSpacer(8.dp)
-        StatusGlyph(record.swapStatus)
-        HSpacer(8.dp)
-        AmountColumn(
-            amount = "${record.amountOut ?: "…"} ${record.tokenOut.ticker}",
-            fiat = record.fiatOut,
-            alignEnd = true,
-            modifier = Modifier.weight(1f),
-        )
-        HSpacer(10.dp)
-        CoinImage(url = record.tokenOut.logoUrl, modifier = Modifier.size(28.dp))
+        HsDivider()
     }
 }
 
 @Composable
-private fun AmountColumn(
-    amount: String,
-    fiat: String?,
-    alignEnd: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
-    ) {
-        Text(
-            text = amount,
-            style = ComposeAppTheme.typography.subheadSB,
-            color = ComposeAppTheme.colors.leah,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = fiat ?: "—",
-            style = ComposeAppTheme.typography.caption,
-            color = ComposeAppTheme.colors.grey,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
+private fun SwapCoinIcon(imageUrl: String?, showSpinner: Boolean) {
+    val leah = ComposeAppTheme.colors.leah
+    val andy = ComposeAppTheme.colors.andy
 
-/** The between-amounts status marker: green ✓ (done), red ! (failed), ↩ (refunded), → (in progress). */
-@Composable
-private fun StatusGlyph(status: SwapStatus) {
-    when (status) {
-        SwapStatus.Completed -> FilledGlyph("✓", ComposeAppTheme.colors.remus)
-        SwapStatus.Failed -> FilledGlyph("!", ComposeAppTheme.colors.lucian)
-        SwapStatus.Refunded -> Text(
-            text = "↩",
-            style = ComposeAppTheme.typography.headline2,
-            color = ComposeAppTheme.colors.grey,
+    val rotate by if (showSpinner) {
+        rememberInfiniteTransition(label = "spinner").animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1500, easing = LinearEasing)
+            ),
+            label = "rotate",
         )
-        else -> Text(
-            text = "→",
-            style = ComposeAppTheme.typography.headline2,
-            color = ComposeAppTheme.colors.grey,
-        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
     }
-}
 
-@Composable
-private fun FilledGlyph(symbol: String, color: androidx.compose.ui.graphics.Color) {
     Box(
         modifier = Modifier
-            .size(20.dp)
-            .clip(CircleShape)
-            .background(color),
+            .size(32.dp)
+            .drawBehind {
+                if (showSpinner) {
+                    inset(-2.dp.toPx()) {
+                        drawArc(
+                            color = andy,
+                            startAngle = 0f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
+                        )
+                        rotate(degrees = rotate) {
+                            drawArc(
+                                color = leah,
+                                startAngle = 0f,
+                                sweepAngle = -120f,
+                                useCenter = false,
+                                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
+                            )
+                        }
+                    }
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
-        Text(symbol, color = ComposeAppTheme.colors.white, style = ComposeAppTheme.typography.captionSB)
+        HsImageCircle(
+            modifier = Modifier.size(32.dp),
+            url = imageUrl,
+            placeholder = R.drawable.coin_placeholder,
+        )
     }
 }
 
-/** "Today" / "Yesterday" / "MMM dd, yyyy" for the day-group header. */
-private fun dayLabel(time: Long): String {
-    val startOfToday = startOfDay(System.currentTimeMillis())
-    val startOfRecord = startOfDay(time)
-    return when (startOfToday - startOfRecord) {
-        0L -> "Today"
-        DAY_MS -> "Yesterday"
-        else -> SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(time))
-    }
+/** The deposit phase — the wallet's `Depositing`: waiting for or confirming the user's send. */
+private val SwapStatus.isDepositing: Boolean
+    get() = this == SwapStatus.NotStarted || this == SwapStatus.Pending || this == SwapStatus.Unknown
+
+@Composable
+private fun statusIconAndTint(status: SwapStatus): Pair<Int, Color> = when (status) {
+    SwapStatus.NotStarted,
+    SwapStatus.Pending,
+    SwapStatus.Swapping,
+    SwapStatus.Unknown -> Pair(R.drawable.arrow_m_right_24, ComposeAppTheme.colors.grey)
+
+    SwapStatus.Completed -> Pair(R.drawable.ic_done_filled_20, ComposeAppTheme.colors.remus)
+    SwapStatus.Refunded -> Pair(R.drawable.ic_arrow_return_20, ComposeAppTheme.colors.grey)
+    SwapStatus.Failed,
+    SwapStatus.ActionRequired -> Pair(R.drawable.ic_warning_filled_20, ComposeAppTheme.colors.lucian)
 }
 
-private fun startOfDay(time: Long): Long = Calendar.getInstance().apply {
-    timeInMillis = time
-    set(Calendar.HOUR_OF_DAY, 0)
-    set(Calendar.MINUTE, 0)
-    set(Calendar.SECOND, 0)
-    set(Calendar.MILLISECOND, 0)
-}.timeInMillis
+/** "Today" / "Yesterday" / "MMMM d" (same year) / "MMMM d, yyyy" for the day-group header. */
+private fun formatDate(date: Date): String {
+    val calendar = Calendar.getInstance()
+    calendar.time = date
 
-private const val DAY_MS = 24L * 60 * 60 * 1000
+    val today = Calendar.getInstance()
+    if (calendar[Calendar.YEAR] == today[Calendar.YEAR] &&
+        calendar[Calendar.DAY_OF_YEAR] == today[Calendar.DAY_OF_YEAR]
+    ) {
+        return "Today"
+    }
+
+    val yesterday = Calendar.getInstance()
+    yesterday.add(Calendar.DAY_OF_MONTH, -1)
+    if (calendar[Calendar.YEAR] == yesterday[Calendar.YEAR] &&
+        calendar[Calendar.DAY_OF_YEAR] == yesterday[Calendar.DAY_OF_YEAR]
+    ) {
+        return "Yesterday"
+    }
+
+    val pattern = if (calendar[Calendar.YEAR] == today[Calendar.YEAR]) "MMMM d" else "MMMM d, yyyy"
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(date)
+}

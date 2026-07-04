@@ -30,6 +30,90 @@ fun subheadSB_grey(
 }
 
 @Composable
+fun subheadSB_leah(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null,
+    overflow: TextOverflow = TextOverflow.Clip,
+    maxLines: Int = Int.MAX_VALUE,
+    onTextLayout: (TextLayoutResult) -> Unit = {}
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        textAlign = textAlign,
+        overflow = overflow,
+        maxLines = maxLines,
+        onTextLayout = onTextLayout,
+        style = ComposeAppTheme.typography.subheadSB,
+        color = ComposeAppTheme.colors.leah,
+    )
+}
+
+@Composable
+fun subheadSB_andy(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null,
+    overflow: TextOverflow = TextOverflow.Clip,
+    maxLines: Int = Int.MAX_VALUE,
+    onTextLayout: (TextLayoutResult) -> Unit = {}
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        textAlign = textAlign,
+        overflow = overflow,
+        maxLines = maxLines,
+        onTextLayout = onTextLayout,
+        style = ComposeAppTheme.typography.subheadSB,
+        color = ComposeAppTheme.colors.andy,
+    )
+}
+
+@Composable
+fun captionSB_grey(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null,
+    overflow: TextOverflow = TextOverflow.Clip,
+    maxLines: Int = Int.MAX_VALUE,
+    onTextLayout: (TextLayoutResult) -> Unit = {}
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        textAlign = textAlign,
+        overflow = overflow,
+        maxLines = maxLines,
+        onTextLayout = onTextLayout,
+        style = ComposeAppTheme.typography.captionSB,
+        color = ComposeAppTheme.colors.grey,
+    )
+}
+
+@Composable
+fun body_grey(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null,
+    overflow: TextOverflow = TextOverflow.Clip,
+    maxLines: Int = Int.MAX_VALUE,
+    onTextLayout: (TextLayoutResult) -> Unit = {}
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        textAlign = textAlign,
+        overflow = overflow,
+        maxLines = maxLines,
+        onTextLayout = onTextLayout,
+        style = ComposeAppTheme.typography.body,
+        color = ComposeAppTheme.colors.grey,
+    )
+}
+
+@Composable
 fun body_leah(
     text: String,
     modifier: Modifier = Modifier,
