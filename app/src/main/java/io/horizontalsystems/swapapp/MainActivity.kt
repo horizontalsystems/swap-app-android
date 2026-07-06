@@ -21,7 +21,9 @@ import io.horizontalsystems.swapapp.swap.SwapProvider
 import io.horizontalsystems.swapapp.swap.SwapToken
 import io.horizontalsystems.swapapp.swap.execution.ActiveSwapTrackingScreen
 import io.horizontalsystems.swapapp.swap.execution.AddressInputScreen
+import io.horizontalsystems.swapapp.swap.execution.ResumedSwapViewModel
 import io.horizontalsystems.swapapp.swap.execution.SwapExecutionViewModel
+import io.horizontalsystems.swapapp.swap.execution.SwapStatus
 import io.horizontalsystems.swapapp.swap.history.SwapHistoryStore
 import io.horizontalsystems.swapapp.swap.history.SwapInfoScreen
 import io.horizontalsystems.swapapp.swap.history.SwapInfoViewModel
@@ -83,6 +85,8 @@ private fun SwapApp() {
     var savedRefund by remember { mutableStateOf<String?>(null) }
     var historyOpen by remember { mutableStateOf(false) }
     var infoUuid by remember { mutableStateOf<String?>(null) }
+    // A history swap still awaiting its deposit, reopened on the deposit-instructions screen.
+    var resumeUuid by remember { mutableStateOf<String?>(null) }
 
     val data = proceed
     // CEX providers reject a swap without a refund address; on-chain DEXes (THORChain/MayaChain)
@@ -90,6 +94,24 @@ private fun SwapApp() {
     val needsRefund = data?.provider?.requiresRefundAddress == true
 
     when {
+        resumeUuid != null -> {
+            BackHandler { resumeUuid = null }
+            val viewModel = viewModel<ResumedSwapViewModel>(
+                key = "resume-$resumeUuid",
+                factory = ResumedSwapViewModel.Factory(uuid = resumeUuid!!, history = history),
+            )
+            ActiveSwapTrackingScreen(
+                uiState = viewModel.uiState,
+                onBack = { resumeUuid = null },
+                onDone = {
+                    // "Go to Main" — close both this screen and the history list underneath.
+                    resumeUuid = null
+                    historyOpen = false
+                },
+                onRetry = { /* no intent creation to retry when resumed from history */ },
+            )
+        }
+
         infoUuid != null -> {
             BackHandler { infoUuid = null }
             val viewModel = viewModel<SwapInfoViewModel>(
@@ -104,7 +126,16 @@ private fun SwapApp() {
             SwapHistoryScreen(
                 store = history,
                 onBack = { historyOpen = false },
-                onOpen = { infoUuid = it.uuid },
+                onOpen = { record ->
+                    // A swap still awaiting its deposit reopens the deposit instructions (address,
+                    // QR, steps); anything further along — or an old record saved before deposit
+                    // details were persisted — opens the read-only info screen.
+                    if (record.swapStatus == SwapStatus.NotStarted && record.depositAddress != null) {
+                        resumeUuid = record.uuid
+                    } else {
+                        infoUuid = record.uuid
+                    }
+                },
             )
         }
 

@@ -35,6 +35,17 @@ data class SwapRecord(
     val fiatIn: String?,
     val fiatOut: String?,
     val status: String,
+    // Deposit details snapshotted at creation (they only exist in the swap-creation response, not
+    // in /v2/track), so a swap still awaiting its deposit can reopen the deposit-instructions
+    // screen from history. All null on records saved before these fields existed.
+    val destinationAddress: String? = null,
+    val depositAddress: String? = null,
+    val attachmentValue: String? = null,
+    val attachmentLabel: String? = null,
+    val paymentUri: String? = null,
+    val deeplink: String? = null,
+    val expiresAtMillis: Long? = null,
+    val trackUrl: String? = null,
 ) {
     val swapStatus: SwapStatus
         get() = try {

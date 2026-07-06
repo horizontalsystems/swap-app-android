@@ -100,7 +100,7 @@ class SwapExecutionViewModel(
 
                 // The swap is now committed (real deposit address + uuid) — record it so it shows in
                 // history even after this screen is gone.
-                history.record(buildRecord(intent.uuid, intent.amountIn))
+                history.record(buildRecord(intent))
 
                 // Poll for live status and walk the tracker forward, mirroring status into history.
                 repository.statusUpdates(intent.uuid).collect { update ->
@@ -116,18 +116,26 @@ class SwapExecutionViewModel(
         }
     }
 
-    private fun buildRecord(uuid: String, committedAmountIn: BigDecimal): SwapRecord = SwapRecord(
-        uuid = uuid,
+    private fun buildRecord(intent: SwapIntent): SwapRecord = SwapRecord(
+        uuid = intent.uuid,
         createdAt = System.currentTimeMillis(),
         providerId = provider.id,
         providerTitle = provider.title,
         tokenIn = tokenIn.toRecordToken(),
         tokenOut = tokenOut.toRecordToken(),
-        amountIn = committedAmountIn.stripTrailingZeros().toPlainString(),
+        amountIn = intent.amountIn.stripTrailingZeros().toPlainString(),
         amountOut = amountOut?.stripTrailingZeros()?.toPlainString(),
         fiatIn = fiatIn?.let { formatFiat(it) },
         fiatOut = fiatOut?.let { formatFiat(it) },
         status = SwapStatus.NotStarted.name,
+        destinationAddress = destinationAddress,
+        depositAddress = intent.depositAddress,
+        attachmentValue = intent.attachmentValue,
+        attachmentLabel = intent.attachmentLabel,
+        paymentUri = intent.paymentUri,
+        deeplink = intent.deeplink,
+        expiresAtMillis = intent.expiresAtMillis,
+        trackUrl = intent.trackUrl,
     )
 
     class Factory(
