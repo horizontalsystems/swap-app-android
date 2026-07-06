@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -23,6 +24,9 @@ fun HSScaffold(
     content: @Composable BoxScope.() -> Unit
 ) {
     Scaffold(
+        // Consume the IME inset so the bottom bar (and content) stay visible above the
+        // soft keyboard instead of being covered by it (edge-to-edge + adjustResize).
+        modifier = Modifier.imePadding(),
         topBar = {
             HSTopAppBar(title, menuItems, onBack)
         },
