@@ -25,10 +25,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.horizontalsystems.swapapp.R
@@ -45,30 +45,25 @@ private data class OnboardingSlide(
 
 private val slides = listOf(
     OnboardingSlide(
-        image = R.drawable.slide_1,
-        title = "Any coin. Any chain. No questions.",
-        description = "Swap thousands of tokens across Bitcoin, Ethereum, Solana, Tron, Cosmos and more — no exchange account in the way.",
+        image = R.drawable.image1,
+        title = "Any Coin, Any Chain",
+        description = "Cross-chain Swap",
     ),
     OnboardingSlide(
-        image = R.drawable.slide_2,
-        title = "Nothing to sign up for.",
-        description = "Swap App never holds your coins and never asks who you are. Your keys stay in your wallet, where they belong.",
+        image = R.drawable.image2,
+        title = "No KYC, No Signup",
+        description = "Swap without verifications",
     ),
     OnboardingSlide(
-        image = R.drawable.slide_3,
-        title = "The best rate finds you.",
-        description = "Every swap is quoted across multiple providers at once. You see them all — the best one is already picked.",
-    ),
-    OnboardingSlide(
-        image = R.drawable.slide_4,
-        title = "Three steps. Done.",
-        description = "Send to a one-time deposit address; the swapped coins land in your wallet. Every address is screened for safety first.",
+        image = R.drawable.image3,
+        title = "Best rates",
+        description = "Multiple Providers in one",
     ),
 )
 
 /**
- * First-launch intro: four swipeable slides, each an illustration over a bottom-anchored
- * title/description block, with an animated page indicator and a Next / "Start Swapping" button.
+ * First-launch intro: three swipeable slides, each a centered illustration with a centered
+ * title/subtitle below, an animated page indicator and a Next / "Get Started" button.
  */
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
@@ -79,8 +74,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            //.background(ComposeAppTheme.colors.tyler)
-            .background(Color(0xFFF0F0F2))
+            .background(ComposeAppTheme.colors.lawrence)
             .systemBarsPadding(),
     ) {
         HorizontalPager(
@@ -92,6 +86,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
                     modifier = Modifier
@@ -104,26 +99,24 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 24.dp),
+                            .padding(horizontal = 32.dp, vertical = 24.dp),
                         contentScale = ContentScale.Fit,
                     )
                 }
                 Text(
                     text = slide.title,
-                    style = ComposeAppTheme.typography.title3.copy(
-                        fontSize = 32.sp,
-                        lineHeight = 40.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
+                    style = ComposeAppTheme.typography.title3,
                     color = ComposeAppTheme.colors.leah,
+                    textAlign = TextAlign.Center,
                 )
-                VSpacer(12.dp)
+                VSpacer(8.dp)
                 Text(
                     text = slide.description,
-                    style = ComposeAppTheme.typography.body.copy(lineHeight = 24.sp),
+                    style = ComposeAppTheme.typography.body,
                     color = ComposeAppTheme.colors.grey,
+                    textAlign = TextAlign.Center,
                 )
-                VSpacer(24.dp)
+                VSpacer(38.dp)
             }
         }
 
@@ -137,7 +130,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
-            title = if (isLastPage) "Start Swapping" else "Next",
+            title = if (isLastPage) "Get Started" else "Next",
             onClick = {
                 if (isLastPage) {
                     onFinish()
@@ -158,7 +151,7 @@ private fun PagerIndicator(count: Int, currentPage: Int, modifier: Modifier = Mo
     ) {
         repeat(count) { index ->
             val active = index == currentPage
-            val width by animateDpAsState(if (active) 28.dp else 8.dp, label = "indicatorWidth")
+            val width by animateDpAsState(if (active) 24.dp else 16.dp, label = "indicatorWidth")
             val color by animateColorAsState(
                 if (active) ComposeAppTheme.colors.yellowD else ComposeAppTheme.colors.blade,
                 label = "indicatorColor",
@@ -166,8 +159,8 @@ private fun PagerIndicator(count: Int, currentPage: Int, modifier: Modifier = Mo
             Box(
                 modifier = Modifier
                     .width(width)
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
                     .background(color),
             )
         }
