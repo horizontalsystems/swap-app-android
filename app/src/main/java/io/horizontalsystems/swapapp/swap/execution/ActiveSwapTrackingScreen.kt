@@ -95,7 +95,7 @@ fun ActiveSwapTrackingScreen(
                 Column(
                     modifier = Modifier
                         .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp)
                 ) {
                     // While the deposit can still be paid, the primary action hands the payment
                     // URI to the user's wallet app; "Go to Main" drops to a plain text button.
@@ -179,7 +179,7 @@ private fun DepositInstructions(
 
     var step = 1
 
-    VSpacer(20.dp)
+    VSpacer(12.dp)
     StepCard(
         number = step++,
         text = "Copy the address and paste it on another wallet from which you are going to send funds",
@@ -227,7 +227,7 @@ private fun DepositInstructions(
     }
 
     if (uiState.expiresAtMillis != null && !uiState.status.isTerminal) {
-        VSpacer(32.dp)
+        VSpacer(24.dp)
         ExpirationRow(expiresAtMillis = uiState.expiresAtMillis)
     }
 
