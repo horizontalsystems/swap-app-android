@@ -7,22 +7,31 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -44,8 +53,10 @@ import io.horizontalsystems.swapapp.compose.components.HsImageCircle
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 import io.horizontalsystems.swapapp.compose.components.body_grey
 import io.horizontalsystems.swapapp.compose.components.captionSB_grey
+import io.horizontalsystems.swapapp.compose.components.subheadSB_grey
 import io.horizontalsystems.swapapp.compose.components.subheadSB_leah
 import io.horizontalsystems.swapapp.swap.execution.SwapStatus
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -55,6 +66,10 @@ import java.util.Locale
  * Lists the user's past swaps (from [SwapHistoryStore]) newest-first, grouped by day — a 1:1 port
  * of the wallet's `multiswap.history.SwapHistoryPage`. Each row shows the paid → received amounts
  * with a status icon between them; tapping opens the [SwapInfoScreen].
+ *
+ * Swaps still awaiting their deposit (and not yet past the order expiry) are additionally pinned
+ * above the day groups as "Active Deposit Address" cards with a live countdown; tapping one goes
+ * through the same [onOpen], which reopens the deposit-instructions screen.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -77,6 +92,20 @@ fun SwapHistoryScreen(
                 )
             }
         } else {
+            // Ticking clock driving the pinned cards' countdowns (and their disappearance on
+            // expiry); only runs while a swap is still awaiting its deposit.
+            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            val hasAwaitingDeposit = records.any { it.isAwaitingDeposit }
+            LaunchedEffect(hasAwaitingDeposit) {
+                while (hasAwaitingDeposit) {
+                    now = System.currentTimeMillis()
+                    delay(1_000)
+                }
+            }
+            val activeDeposits = records.filter {
+                it.isAwaitingDeposit && (it.expiresAtMillis == null || it.expiresAtMillis > now)
+            }
+
             // Records are already newest-first; bucket consecutively into day groups keeping that order.
             val groups = LinkedHashMap<String, MutableList<SwapRecord>>()
             records.forEach { groups.getOrPut(formatDate(Date(it.createdAt))) { mutableListOf() }.add(it) }
@@ -86,6 +115,17 @@ fun SwapHistoryScreen(
                     .fillMaxSize()
                     .background(ComposeAppTheme.colors.lawrence),
             ) {
+                if (activeDeposits.isNotEmpty()) {
+                    item { VSpacer(8.dp) }
+                    items(activeDeposits, key = { "deposit-${it.uuid}" }) { record ->
+                        ActiveDepositCell(
+                            record = record,
+                            remainingMillis = record.expiresAtMillis?.let { it - now },
+                            onClick = { onOpen(record) },
+                        )
+                    }
+                    item { VSpacer(8.dp) }
+                }
                 groups.forEach { (dateHeader, swaps) ->
                     stickyHeader {
                         HeaderStick(
@@ -104,6 +144,68 @@ fun SwapHistoryScreen(
                 item { VSpacer(32.dp) }
             }
         }
+    }
+}
+
+/**
+ * Rounded card pinned above the day groups for a swap whose deposit address is still active:
+ * "TOKEN_IN › TOKEN_OUT" eyebrow, title, and an amber "Expire in …" countdown (hidden when the
+ * provider set no expiry), with a chevron hinting it reopens the deposit-instructions screen.
+ */
+@Composable
+private fun ActiveDepositCell(
+    record: SwapRecord,
+    remainingMillis: Long?,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(ComposeAppTheme.colors.tyler)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            subheadSB_grey(text = "${record.tokenIn.ticker} › ${record.tokenOut.ticker}")
+            Text(
+                text = "Active Deposit Address",
+                style = ComposeAppTheme.typography.headline2,
+                color = ComposeAppTheme.colors.leah,
+            )
+            remainingMillis?.let {
+                Text(
+                    text = "Expire in ${formatExpireIn(it)}",
+                    style = ComposeAppTheme.typography.subheadSB,
+                    color = ComposeAppTheme.colors.jacob,
+                )
+            }
+        }
+        Icon(
+            painter = painterResource(R.drawable.arrow_b_right_24),
+            contentDescription = null,
+            tint = ComposeAppTheme.colors.grey,
+        )
+    }
+}
+
+/** Still on the deposit step with reopenable instructions — the condition [SwapHistoryScreen]'s
+ *  onOpen (in MainActivity) routes to the deposit-instructions screen instead of the info screen. */
+private val SwapRecord.isAwaitingDeposit: Boolean
+    get() = swapStatus == SwapStatus.NotStarted && depositAddress != null
+
+/** Coarse countdown for the pinned card: `2h 29m` above an hour, `29m` above a minute, then `45s`. */
+private fun formatExpireIn(millis: Long): String {
+    val totalSeconds = (millis + 999) / 1_000
+    val hours = totalSeconds / 3_600
+    val minutes = totalSeconds % 3_600 / 60
+    return when {
+        hours > 0 -> "${hours}h ${"%02d".format(minutes)}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "${totalSeconds % 60}s"
     }
 }
 

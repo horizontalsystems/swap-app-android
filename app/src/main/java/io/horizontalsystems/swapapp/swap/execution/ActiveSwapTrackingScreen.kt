@@ -3,9 +3,7 @@ package io.horizontalsystems.swapapp.swap.execution
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +46,7 @@ import androidx.core.net.toUri
 import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
+import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryTransparent
 import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
 import io.horizontalsystems.swapapp.compose.components.ButtonSecondary
 import io.horizontalsystems.swapapp.compose.components.CoinImage
@@ -60,9 +59,11 @@ import java.math.BigDecimal
 
 /**
  * Deposit instructions for a committed swap: which token is swapping to which (a spinner over the
- * sell-token icon while the deposit hasn't arrived), the order expiry countdown when the backend
- * set one, and the numbered steps to make the swap happen (copy address / copy amount / track by
- * link). Status keeps polling `POST /v2/track` via [SwapExecutionViewModel] underneath.
+ * sell-token icon while the deposit hasn't arrived), the numbered steps to make the swap happen
+ * (copy address / copy amount / track by link), and the order expiry countdown under them when
+ * the backend set one. While the deposit is still payable the bottom bar's primary action opens
+ * the payment deeplink in the user's wallet app. Status keeps polling `POST /v2/track` via
+ * [SwapExecutionViewModel] underneath.
  */
 @Composable
 fun ActiveSwapTrackingScreen(
@@ -77,6 +78,13 @@ fun ActiveSwapTrackingScreen(
         clipboard.setText(AnnotatedString(value))
         Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
     }
+    val openLink = { url: String ->
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
+        }
+    }
     val ready = !uiState.creatingIntent && uiState.error == null && uiState.depositAddress != null
 
     HSScaffold(
@@ -84,16 +92,33 @@ fun ActiveSwapTrackingScreen(
         onBack = onBack,
         bottomBar = {
             if (ready) {
-                Box(
+                Column(
                     modifier = Modifier
                         .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)
                 ) {
-                    ButtonPrimaryYellow(
-                        modifier = Modifier.fillMaxWidth(),
-                        title = "Go to Main",
-                        onClick = onDone,
-                    )
+                    // While the deposit can still be paid, the primary action hands the payment
+                    // URI to the user's wallet app; "Go to Main" drops to a plain text button.
+                    val deeplink = uiState.deeplink
+                    if (deeplink != null && !uiState.status.isTerminal) {
+                        ButtonPrimaryYellow(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = "Open Wallet",
+                            onClick = { openLink(deeplink) },
+                        )
+                        VSpacer(8.dp)
+                        ButtonPrimaryTransparent(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = "Go to Main",
+                            onClick = onDone,
+                        )
+                    } else {
+                        ButtonPrimaryYellow(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = "Go to Main",
+                            onClick = onDone,
+                        )
+                    }
                 }
             }
         },
@@ -129,13 +154,7 @@ fun ActiveSwapTrackingScreen(
                 DepositInstructions(
                     uiState = uiState,
                     onCopy = copyToClipboard,
-                    onOpenLink = { url ->
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                        } catch (e: ActivityNotFoundException) {
-                            Toast.makeText(context, "No app found to open the link", Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    onOpenLink = openLink,
                 )
             }
         }
@@ -156,11 +175,6 @@ private fun DepositInstructions(
     statusBanner(uiState)?.let { (message, color) ->
         VSpacer(16.dp)
         Text(text = message, style = ComposeAppTheme.typography.subhead, color = color)
-    }
-
-    if (uiState.expiresAtMillis != null && !uiState.status.isTerminal) {
-        VSpacer(20.dp)
-        ExpirationCard(expiresAtMillis = uiState.expiresAtMillis)
     }
 
     var step = 1
@@ -210,6 +224,11 @@ private fun DepositInstructions(
             StepPill(text = "Link", icon = R.drawable.copy_20, onClick = { onCopy(trackUrl) })
             StepPill(text = "Go to Link", icon = R.drawable.ic_globe_20, onClick = { onOpenLink(trackUrl) })
         }
+    }
+
+    if (uiState.expiresAtMillis != null && !uiState.status.isTerminal) {
+        VSpacer(32.dp)
+        ExpirationRow(expiresAtMillis = uiState.expiresAtMillis)
     }
 
     VSpacer(24.dp)
@@ -300,9 +319,9 @@ private fun SwapHeader(uiState: ActiveSwapUiState) {
     }
 }
 
-/** Orange-bordered warning card with a live "Expire in" countdown. */
+/** Centered attention icon + live "Expire in: 2h 03m" countdown, shown under the step cards. */
 @Composable
-private fun ExpirationCard(expiresAtMillis: Long) {
+private fun ExpirationRow(expiresAtMillis: Long) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(expiresAtMillis) {
         while (true) {
@@ -312,65 +331,36 @@ private fun ExpirationCard(expiresAtMillis: Long) {
     }
     val remainingMillis = expiresAtMillis - now
     val expired = remainingMillis <= 0
+    val alertColor = if (expired) ComposeAppTheme.colors.lucian else ComposeAppTheme.colors.jacob
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(BorderStroke(1.dp, ComposeAppTheme.colors.jacob), RoundedCornerShape(16.dp))
-            .padding(16.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(R.drawable.ic_attention_20),
-                contentDescription = null,
-                tint = ComposeAppTheme.colors.jacob,
-                modifier = Modifier.size(20.dp),
-            )
-            HSpacer(8.dp)
-            Text(
-                text = "Attention!",
-                style = ComposeAppTheme.typography.headline2,
-                color = ComposeAppTheme.colors.jacob,
-            )
-        }
-        VSpacer(8.dp)
-        Text(
-            text = "If the transaction is not received during this time, the deposit will not be made.",
-            style = ComposeAppTheme.typography.subhead,
-            color = ComposeAppTheme.colors.leah,
+        Icon(
+            painter = painterResource(R.drawable.ic_attention_20),
+            contentDescription = null,
+            tint = alertColor,
+            modifier = Modifier.size(24.dp),
         )
-        VSpacer(12.dp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Expire in:",
-                style = ComposeAppTheme.typography.subhead,
-                color = ComposeAppTheme.colors.grey,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                painter = painterResource(R.drawable.clock_24),
-                contentDescription = null,
-                tint = if (expired) ComposeAppTheme.colors.lucian else ComposeAppTheme.colors.leah,
-                modifier = Modifier.size(20.dp),
-            )
-            HSpacer(6.dp)
-            Text(
-                text = if (expired) "Expired" else formatRemaining(remainingMillis),
-                style = ComposeAppTheme.typography.headline1,
-                color = if (expired) ComposeAppTheme.colors.lucian else ComposeAppTheme.colors.leah,
-            )
-        }
+        HSpacer(8.dp)
+        Text(
+            text = if (expired) "Expired" else "Expire in: ${formatRemaining(remainingMillis)}",
+            style = ComposeAppTheme.typography.headline1,
+            color = if (expired) ComposeAppTheme.colors.lucian else ComposeAppTheme.colors.leah,
+        )
     }
 }
 
-/** Ticking countdown: `2h 03m 45s` above an hour, `3m 45s` below it, `45s` in the last minute. */
+/** Ticking countdown: `2h 03m` above an hour, `3m 45s` below it, `45s` in the last minute. */
 private fun formatRemaining(millis: Long): String {
     val totalSeconds = (millis + 999) / 1_000 // round up so it never reads 0s while time is left
     val hours = totalSeconds / 3_600
     val minutes = totalSeconds % 3_600 / 60
     val seconds = totalSeconds % 60
     return when {
-        hours > 0 -> "${hours}h ${"%02d".format(minutes)}m ${"%02d".format(seconds)}s"
+        hours > 0 -> "${hours}h ${"%02d".format(minutes)}m"
         minutes > 0 -> "${minutes}m ${"%02d".format(seconds)}s"
         else -> "${seconds}s"
     }
