@@ -53,6 +53,12 @@ data class SwapRecord(
         } catch (e: IllegalArgumentException) {
             SwapStatus.Unknown
         }
+
+    /** Still awaiting the user's deposit on a not-yet-expired order, with stored deposit details —
+     *  the state in which history can reopen the deposit-instructions screen. */
+    val canResumeDeposit: Boolean
+        get() = swapStatus == SwapStatus.NotStarted && depositAddress != null &&
+            (expiresAtMillis == null || expiresAtMillis > System.currentTimeMillis())
 }
 
 /**
@@ -71,6 +77,8 @@ class SwapHistoryStore(context: Context) {
             if (!loaded) {
                 _records.value = read()
                 loaded = true
+                // Orders that expired while the app was closed are dead — mark them right away.
+                expireStaleDeposits()
             }
         }
     }
@@ -84,14 +92,34 @@ class SwapHistoryStore(context: Context) {
         (listOf(record) + list.filterNot { it.uuid == record.uuid }).take(MAX)
     }
 
-    /** Update the last-known status of a tracked swap; no-op if it isn't recorded. */
+    /** Update the last-known status of a tracked swap; no-op if it isn't recorded. An [SwapStatus.Expired]
+     *  record stays expired when `/v2/track` still reports `not_started` (the deposit never arrived);
+     *  any real progress (the deposit landed after all) still upgrades it. */
     fun updateStatus(uuid: String, status: SwapStatus) = mutate { list ->
-        list.map { if (it.uuid == uuid) it.copy(status = status.name) else it }
+        list.map {
+            when {
+                it.uuid != uuid -> it
+                it.swapStatus == SwapStatus.Expired && status == SwapStatus.NotStarted -> it
+                else -> it.copy(status = status.name)
+            }
+        }
+    }
+
+    /** Mark swaps whose order expired before any deposit was seen as [SwapStatus.Expired]. */
+    fun expireStaleDeposits(now: Long = System.currentTimeMillis()) = mutate { list ->
+        list.map {
+            if (it.swapStatus == SwapStatus.NotStarted && it.expiresAtMillis != null && it.expiresAtMillis <= now) {
+                it.copy(status = SwapStatus.Expired.name)
+            } else {
+                it
+            }
+        }
     }
 
     private fun mutate(transform: (List<SwapRecord>) -> List<SwapRecord>) {
         synchronized(lock) {
             val updated = transform(_records.value)
+            if (updated == _records.value) return
             _records.value = updated
             prefs.edit().putString(KEY, gson.toJson(updated)).apply()
         }

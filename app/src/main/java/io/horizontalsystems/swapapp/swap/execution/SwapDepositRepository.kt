@@ -32,16 +32,20 @@ enum class SwapStatus(val label: String) {
     Completed("Completed!"),
     Refunded("Refunded"),
     Failed("Failed"),
+
+    /** Local-only: the order expired before any deposit was seen. Assigned by the app (the API
+     *  keeps reporting `not_started` for such orders), so [fromApi] never returns it. */
+    Expired("Deposit expired"),
     ActionRequired("Action required"),
     Unknown("Checking status…");
 
     /** Polling stops on a terminal status. */
-    val isTerminal: Boolean get() = this == Completed || this == Refunded || this == Failed
+    val isTerminal: Boolean get() = this == Completed || this == Refunded || this == Failed || this == Expired
 
     /** Position in the [stages] stepper (action_required sits at the exchanging stage). */
     val stageIndex: Int
         get() = when (this) {
-            NotStarted, Unknown -> 0
+            NotStarted, Unknown, Expired -> 0
             Pending -> 1
             Swapping, ActionRequired -> 2
             Completed -> 3

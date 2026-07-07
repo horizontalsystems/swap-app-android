@@ -230,6 +230,13 @@ private fun SwapStatusSteps(status: SwapStatus, legs: List<SwapLeg>) {
             failedIndex = 1
         }
 
+        // The order expired before the deposit arrived — the swap died on the deposit step.
+        SwapStatus.Expired -> {
+            steps = normalSteps.take(1)
+            activeIndex = 0
+            failedIndex = 0
+        }
+
         SwapStatus.NotStarted,
         SwapStatus.Pending,
         SwapStatus.Unknown -> {

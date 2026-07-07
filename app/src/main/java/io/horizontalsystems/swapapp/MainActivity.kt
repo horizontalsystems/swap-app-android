@@ -23,7 +23,6 @@ import io.horizontalsystems.swapapp.swap.execution.ActiveSwapTrackingScreen
 import io.horizontalsystems.swapapp.swap.execution.AddressInputScreen
 import io.horizontalsystems.swapapp.swap.execution.ResumedSwapViewModel
 import io.horizontalsystems.swapapp.swap.execution.SwapExecutionViewModel
-import io.horizontalsystems.swapapp.swap.execution.SwapStatus
 import io.horizontalsystems.swapapp.swap.history.SwapHistoryStore
 import io.horizontalsystems.swapapp.swap.history.SwapInfoScreen
 import io.horizontalsystems.swapapp.swap.history.SwapInfoViewModel
@@ -128,9 +127,9 @@ private fun SwapApp() {
                 onBack = { historyOpen = false },
                 onOpen = { record ->
                     // A swap still awaiting its deposit reopens the deposit instructions (address,
-                    // QR, steps); anything further along — or an old record saved before deposit
-                    // details were persisted — opens the read-only info screen.
-                    if (record.swapStatus == SwapStatus.NotStarted && record.depositAddress != null) {
+                    // QR, steps); anything further along — expired, an old record saved before
+                    // deposit details were persisted, … — opens the read-only info screen.
+                    if (record.canResumeDeposit) {
                         resumeUuid = record.uuid
                     } else {
                         infoUuid = record.uuid

@@ -92,19 +92,21 @@ fun SwapHistoryScreen(
                 )
             }
         } else {
-            // Ticking clock driving the pinned cards' countdowns (and their disappearance on
-            // expiry); only runs while a swap is still awaiting its deposit.
+            // Ticking clock driving the pinned cards' countdowns, and marking a deposit failed
+            // (SwapStatus.Expired) the moment its order expires — which stops that row's spinner
+            // and drops its pinned card. Only runs while a swap is still on the deposit step.
             var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            val hasAwaitingDeposit = records.any { it.isAwaitingDeposit }
-            LaunchedEffect(hasAwaitingDeposit) {
-                while (hasAwaitingDeposit) {
+            val hasPendingDeposit = records.any {
+                it.swapStatus == SwapStatus.NotStarted && it.depositAddress != null
+            }
+            LaunchedEffect(hasPendingDeposit) {
+                while (hasPendingDeposit) {
                     now = System.currentTimeMillis()
+                    store.expireStaleDeposits(now)
                     delay(1_000)
                 }
             }
-            val activeDeposits = records.filter {
-                it.isAwaitingDeposit && (it.expiresAtMillis == null || it.expiresAtMillis > now)
-            }
+            val activeDeposits = records.filter { it.canResumeDeposit }
 
             // Records are already newest-first; bucket consecutively into day groups keeping that order.
             val groups = LinkedHashMap<String, MutableList<SwapRecord>>()
@@ -191,11 +193,6 @@ private fun ActiveDepositCell(
         )
     }
 }
-
-/** Still on the deposit step with reopenable instructions — the condition [SwapHistoryScreen]'s
- *  onOpen (in MainActivity) routes to the deposit-instructions screen instead of the info screen. */
-private val SwapRecord.isAwaitingDeposit: Boolean
-    get() = swapStatus == SwapStatus.NotStarted && depositAddress != null
 
 /** Coarse countdown for the pinned card: `2h 29m` above an hour, `29m` above a minute, then `45s`. */
 private fun formatExpireIn(millis: Long): String {
@@ -335,6 +332,7 @@ private fun statusIconAndTint(status: SwapStatus): Pair<Int, Color> = when (stat
     SwapStatus.Completed -> Pair(R.drawable.ic_done_filled_20, ComposeAppTheme.colors.remus)
     SwapStatus.Refunded -> Pair(R.drawable.ic_arrow_return_20, ComposeAppTheme.colors.grey)
     SwapStatus.Failed,
+    SwapStatus.Expired,
     SwapStatus.ActionRequired -> Pair(R.drawable.ic_warning_filled_20, ComposeAppTheme.colors.lucian)
 }
 

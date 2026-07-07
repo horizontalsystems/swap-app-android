@@ -47,9 +47,13 @@ class SwapInfoViewModel(
         }
     }
 
-    /** Apply a live update, but never downgrade a known status to [SwapStatus.Unknown] (e.g. offline). */
+    /** Apply a live update, but never downgrade a known status to [SwapStatus.Unknown] (e.g. offline),
+     *  and keep an expired deposit expired while `/v2/track` still reports `not_started` — the API
+     *  never learns about expiry, so only real progress (the deposit landed after all) upgrades it. */
     private fun apply(update: SwapTrackUpdate) {
-        if (update.status == SwapStatus.Unknown && uiState.status != SwapStatus.Unknown) {
+        val downgrade = (update.status == SwapStatus.Unknown && uiState.status != SwapStatus.Unknown) ||
+            (update.status == SwapStatus.NotStarted && uiState.status == SwapStatus.Expired)
+        if (downgrade) {
             if (update.legs.isNotEmpty()) uiState = uiState.copy(legs = update.legs)
             return
         }
