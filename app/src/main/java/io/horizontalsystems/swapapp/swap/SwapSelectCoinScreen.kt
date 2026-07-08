@@ -37,6 +37,7 @@ import io.horizontalsystems.swapapp.components.cell.hs
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.compose.components.CoinImage
 import io.horizontalsystems.swapapp.compose.components.HsDivider
+import io.horizontalsystems.swapapp.compose.components.HsImage
 import io.horizontalsystems.swapapp.compose.components.HsIconButton
 import io.horizontalsystems.swapapp.compose.components.VSpacer
 
@@ -177,16 +178,58 @@ private fun PopularTokenChip(item: TokenViewItem, onClick: () -> Unit) {
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CoinImage(
-            url = item.logoUrl,
-            modifier = Modifier.size(24.dp),
-        )
+        TokenIconWithBadge(item)
         Text(
             text = item.code,
             modifier = Modifier.padding(start = 8.dp),
             style = ComposeAppTheme.typography.subhead,
             color = ComposeAppTheme.colors.leah,
         )
+    }
+}
+
+/**
+ * Token icon with a small square chain badge at the bottom-right corner, ported from the reference
+ * wallet's multiswap `TokenIconWithBadge`. Native coins (and chains without a badge icon) render as
+ * a plain centered icon — the coin itself already identifies the chain.
+ */
+@Composable
+private fun TokenIconWithBadge(item: TokenViewItem) {
+    val badgeUrl = item.token.chainIconUrl
+    Box(
+        modifier = Modifier.size(24.dp),
+    ) {
+        if (item.token.isNative || badgeUrl == null) {
+            CoinImage(
+                url = item.logoUrl,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(20.dp),
+            )
+        } else {
+            CoinImage(
+                url = item.logoUrl,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(20.dp),
+            )
+            val badgeShape = RoundedCornerShape(2.dp)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 0.5.dp, end = 0.5.dp)
+                    .size(11.dp)
+                    .clip(badgeShape)
+                    .background(ComposeAppTheme.colors.blade)
+            )
+            HsImage(
+                url = badgeUrl,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(10.dp)
+                    .clip(badgeShape),
+            )
+        }
     }
 }
 

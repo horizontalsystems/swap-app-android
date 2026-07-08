@@ -63,7 +63,58 @@ data class SwapToken(
             else -> chainId?.replaceFirstChar { it.uppercase() } ?: chain
         }
 
+    /**
+     * Icon URL for the token's [chain] on the blocksdecoded CDN (same source the reference wallet
+     * uses for its chain badges), or null for chains with no icon there. Every uid is verified to
+     * exist on the CDN; the unmapped chains (BERA, DOGE, FIRO, MAYA, XRD, ZANO…) host effectively
+     * only native coins, which render without a badge anyway.
+     */
+    val chainIconUrl: String?
+        get() = CHAIN_ICON_UIDS[chain.uppercase()]?.let {
+            "https://cdn.blocksdecoded.com/blockchain-icons/32px/$it@3x.png"
+        }
+
     companion object {
+        // Swap API chain code (plus common aliases) → blocksdecoded blockchain-icon uid.
+        private val CHAIN_ICON_UIDS = mapOf(
+            "ADA" to "cardano",
+            "ARB" to "arbitrum-one",
+            "ARBITRUM" to "arbitrum-one",
+            "AVAX" to "avalanche",
+            "BASE" to "base",
+            "BCH" to "bitcoin-cash",
+            "BSC" to "binance-smart-chain",
+            "BNB" to "binance-smart-chain",
+            "BTC" to "bitcoin",
+            "DASH" to "dash",
+            "DOT" to "polkadot",
+            "ETH" to "ethereum",
+            "GAIA" to "cosmos",
+            "ATOM" to "cosmos",
+            "COSMOS" to "cosmos",
+            "GNO" to "gnosis",
+            "LTC" to "litecoin",
+            "NEAR" to "near-protocol",
+            "OP" to "optimistic-ethereum",
+            "OPTIMISM" to "optimistic-ethereum",
+            "POL" to "polygon-pos",
+            "MATIC" to "polygon-pos",
+            "POLYGON" to "polygon-pos",
+            "SOL" to "solana",
+            "SOLANA" to "solana",
+            "SUI" to "sui",
+            "THOR" to "thorchain",
+            "THORCHAIN" to "thorchain",
+            "TON" to "the-open-network",
+            "TRON" to "tron",
+            "TRX" to "tron",
+            "XEC" to "ecash",
+            "XLM" to "stellar",
+            "XMR" to "monero",
+            "XRP" to "xrp",
+            "ZEC" to "zcash",
+        )
+
         /**
          * Maps a DTO to a token, or null if it lacks the fields we need (so it's skipped). v2 token
          * objects carry no providers — [SwapTokenRepository] supplies the supporting [providers].
