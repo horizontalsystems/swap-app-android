@@ -99,7 +99,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 32.dp, vertical = 24.dp),
+                            .padding(vertical = 24.dp),
                         contentScale = ContentScale.Fit,
                     )
                 }
@@ -125,7 +125,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             currentPage = pagerState.currentPage,
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
-        VSpacer(20.dp)
+        VSpacer(54.dp)
         ButtonPrimaryYellow(
             modifier = Modifier
                 .fillMaxWidth()
