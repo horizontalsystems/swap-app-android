@@ -6,16 +6,19 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.CircularProgressIndicator
@@ -50,10 +53,9 @@ import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryTransparent
 import io.horizontalsystems.swapapp.compose.components.ButtonPrimaryYellow
 import io.horizontalsystems.swapapp.compose.components.ButtonSecondary
 import io.horizontalsystems.swapapp.compose.components.CoinImage
+import io.horizontalsystems.swapapp.compose.components.SecondaryButtonDefaults
 import io.horizontalsystems.swapapp.compose.components.HSpacer
 import io.horizontalsystems.swapapp.compose.components.VSpacer
-import io.horizontalsystems.swapapp.swap.formatCoinAmount
-import io.horizontalsystems.swapapp.swap.formatFiat
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
 
@@ -179,18 +181,18 @@ private fun DepositInstructions(
 
     var step = 1
 
-    VSpacer(12.dp)
+    VSpacer(16.dp)
     StepCard(
         number = step++,
-        text = "Copy the address and paste it on another wallet from which you are going to send funds",
+        text = "Send ${uiState.tokenInCode} to this address",
     ) {
         var showQr by remember { mutableStateOf(false) }
         StepPill(
             text = middleTruncate(depositAddress, edge = 6),
-            icon = R.drawable.copy_20,
+            icon = R.drawable.ic_copy_20,
             onClick = { onCopy(depositAddress) },
         )
-        StepPill(icon = R.drawable.ic_qr_scan_20, onClick = { showQr = true })
+        StepPill(icon = R.drawable.scan_24, onClick = { showQr = true })
         if (showQr) {
             QrDialog(
                 content = uiState.paymentUri ?: depositAddress,
@@ -208,26 +210,35 @@ private fun DepositInstructions(
             number = step++,
             text = "Copy the $label and include it in the transaction, otherwise the funds will be lost",
         ) {
-            StepPill(text = attachment, icon = R.drawable.copy_20, onClick = { onCopy(attachment) })
+            StepPill(
+                text = attachment,
+                icon = R.drawable.ic_copy_20,
+                onClick = { onCopy(attachment) })
         }
     }
 
     val exactAmount = formatAmount(uiState.amountIn)
     VSpacer(12.dp)
-    StepCard(number = step++, text = "Copy the amount you need to send") {
-        StepPill(text = exactAmount, icon = R.drawable.copy_20, onClick = { onCopy(exactAmount) })
+    StepCard(number = step++, text = "Send exactly this amount") {
+        StepPill(
+            text = exactAmount,
+            icon = R.drawable.ic_copy_20,
+            onClick = { onCopy(exactAmount) })
     }
 
     uiState.trackUrl?.let { trackUrl ->
         VSpacer(12.dp)
-        StepCard(number = step, text = "Send and track the transaction progress via the link") {
-            StepPill(text = "Link", icon = R.drawable.copy_20, onClick = { onCopy(trackUrl) })
-            StepPill(text = "Go to Link", icon = R.drawable.ic_globe_20, onClick = { onOpenLink(trackUrl) })
+        StepCard(number = step, text = "Track your transaction") {
+            StepPill(text = "Link", icon = R.drawable.ic_copy_20, onClick = { onCopy(trackUrl) })
+            StepPill(
+                text = "Go to Link",
+                icon = R.drawable.ic_globe_20,
+                onClick = { onOpenLink(trackUrl) })
         }
     }
 
     if (uiState.expiresAtMillis != null && !uiState.status.isTerminal) {
-        VSpacer(24.dp)
+        VSpacer(30.dp)
         ExpirationRow(expiresAtMillis = uiState.expiresAtMillis)
     }
 
@@ -240,9 +251,11 @@ private fun statusBanner(uiState: ActiveSwapUiState): Pair<String, Color>? = whe
     uiState.completed -> "Completed — your funds are on the way." to ComposeAppTheme.colors.remus
     uiState.status == SwapStatus.Refunded ->
         "Swap failed — your funds were refunded." to ComposeAppTheme.colors.lucian
+
     uiState.status == SwapStatus.Failed -> "Swap failed." to ComposeAppTheme.colors.lucian
     uiState.status == SwapStatus.ActionRequired ->
         actionRequiredMessage(uiState.pauseReason) to ComposeAppTheme.colors.lucian
+
     else -> null
 }
 
@@ -296,23 +309,16 @@ private fun SwapHeader(uiState: ActiveSwapUiState) {
             )
         }
         Column(horizontalAlignment = Alignment.End) {
-            val amountOut = uiState.amountOut
             Text(
-                text = if (amountOut != null) {
-                    "${formatCoinAmount(amountOut, maxDecimals = 8)} ${uiState.tokenOutCode}"
-                } else {
-                    uiState.tokenOutCode
-                },
+                text = uiState.tokenOutCode,
                 style = ComposeAppTheme.typography.headline2,
                 color = ComposeAppTheme.colors.leah,
             )
-            uiState.fiatOut?.let {
-                Text(
-                    text = formatFiat(it),
-                    style = ComposeAppTheme.typography.subhead,
-                    color = ComposeAppTheme.colors.grey,
-                )
-            }
+            Text(
+                text = uiState.tokenOutNetwork,
+                style = ComposeAppTheme.typography.subhead,
+                color = ComposeAppTheme.colors.grey,
+            )
         }
         HSpacer(12.dp)
         CoinImage(url = uiState.tokenOutLogo, modifier = Modifier.size(40.dp))
@@ -339,7 +345,7 @@ private fun ExpirationRow(expiresAtMillis: Long) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_attention_20),
+            painter = painterResource(R.drawable.warning_filled_24),
             contentDescription = null,
             tint = alertColor,
             modifier = Modifier.size(24.dp),
@@ -380,11 +386,13 @@ private fun StepCard(
             .background(ComposeAppTheme.colors.lawrence)
             .padding(16.dp)
     ) {
-        Row {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(9.dp))
+                    .size(32.dp)
+                    .clip(CircleShape)
                     .background(ComposeAppTheme.colors.jacob),
                 contentAlignment = Alignment.Center,
             ) {
@@ -394,20 +402,20 @@ private fun StepCard(
                     color = ComposeAppTheme.colors.white,
                 )
             }
-            HSpacer(12.dp)
+            HSpacer(16.dp)
             Text(
                 text = text,
-                style = ComposeAppTheme.typography.subhead,
+                style = ComposeAppTheme.typography.headline2,
                 color = ComposeAppTheme.colors.leah,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(top = 4.dp),
+                modifier = Modifier.weight(1f),
             )
         }
         VSpacer(12.dp)
         Row(
-            modifier = Modifier.padding(start = 40.dp),
+            modifier = Modifier
+                .padding(start = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             actions()
         }
@@ -421,12 +429,18 @@ private fun StepPill(
     icon: Int,
     text: String? = null,
 ) {
-    ButtonSecondary(onClick = onClick, shape = RoundedCornerShape(16.dp)) {
+    ButtonSecondary(
+        onClick = onClick,
+        // Icon-only pills (e.g. the QR button) are circles.
+        shape = if (text == null) CircleShape else RoundedCornerShape(16.dp),
+        modifier = if (text == null) Modifier.size(32.dp) else Modifier.height(32.dp),
+        contentPadding = if (text == null) PaddingValues(0.dp) else SecondaryButtonDefaults.ContentPadding,
+    ) {
         Icon(
             painter = painterResource(icon),
             contentDescription = null,
             tint = ComposeAppTheme.colors.leah,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(20.dp),
         )
         text?.let {
             HSpacer(6.dp)

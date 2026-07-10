@@ -16,6 +16,7 @@ class Typography internal constructor(
     val title3: TextStyle,
     val headline1: TextStyle,
     val headline2: TextStyle,
+    val headlineSB: TextStyle,
     val body: TextStyle,
     val subhead: TextStyle,
     val subheadSB: TextStyle,
@@ -40,6 +41,11 @@ class Typography internal constructor(
         headline2: TextStyle = TextStyle(
             fontWeight = FontWeight.SemiBold,
             fontSize = 16.sp,
+            letterSpacing = 0.sp,
+        ),
+        headlineSB: TextStyle = TextStyle(
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 18.sp,
             letterSpacing = 0.sp,
         ),
         body: TextStyle = TextStyle(
@@ -76,6 +82,7 @@ class Typography internal constructor(
         title3 = title3.withFontFamily(defaultFontFamily),
         headline1 = headline1.withFontFamily(defaultFontFamily),
         headline2 = headline2.withFontFamily(defaultFontFamily),
+        headlineSB = headlineSB.withFontFamily(defaultFontFamily),
         body = body.withFontFamily(defaultFontFamily),
         subhead = subhead.withFontFamily(defaultFontFamily),
         subheadSB = subheadSB.withFontFamily(defaultFontFamily),

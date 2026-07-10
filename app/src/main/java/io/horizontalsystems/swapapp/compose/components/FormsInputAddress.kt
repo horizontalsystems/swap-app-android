@@ -178,7 +178,7 @@ fun FormsInputAddress(
 
                 ButtonSecondaryCircle(
                     modifier = Modifier.padding(end = 8.dp),
-                    icon = R.drawable.ic_qr_scan_20,
+                    icon = R.drawable.scan_24,
                     contentDescription = "Scan QR code",
                     onClick = {
                         scanLauncher.launch(
