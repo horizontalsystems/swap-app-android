@@ -14,6 +14,7 @@ fun routeViewItems(
     quotes: List<SwapProviderQuote>,
     sortType: RouteSortType,
     priceOut: BigDecimal?,
+    showProviderNames: Boolean = false,
 ): List<RouteViewItem> {
     val bestAmount = quotes.maxByOrNull { it.amountOut }?.amountOut
 
@@ -30,6 +31,7 @@ fun routeViewItems(
             diffPercent = diffPercent(quote.amountOut, bestAmount),
             rating = RouteRating.from(quote.amlPolicy),
             estimatedTime = quote.estimationTime?.let { formatDurationShort(it) } ?: "N/A",
+            providerName = quote.provider.title.takeIf { showProviderNames },
         )
     }
 }
@@ -63,6 +65,8 @@ data class RouteViewItem(
     val diffPercent: String?,
     val rating: RouteRating?,
     val estimatedTime: String,
+    /** Provider title, e.g. "ChangeNOW"; non-null only with the debug "provider names" setting on. */
+    val providerName: String? = null,
 )
 
 /** Provider safety rating, from the API's per-route `amlPolicy`. */

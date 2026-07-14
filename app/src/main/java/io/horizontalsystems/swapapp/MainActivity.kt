@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.onboarding.OnboardingScreen
+import io.horizontalsystems.swapapp.settings.DebugSettingsScreen
 import io.horizontalsystems.swapapp.swap.MainSwapScreen
 import io.horizontalsystems.swapapp.swap.MainSwapViewModel
 import io.horizontalsystems.swapapp.swap.SwapProvider
@@ -83,6 +84,8 @@ private fun SwapApp() {
     var savedDestination by remember { mutableStateOf<String?>(null) }
     var savedRefund by remember { mutableStateOf<String?>(null) }
     var historyOpen by remember { mutableStateOf(false) }
+    // Debug-build-only settings screen, opened from the gear icon on the main screen.
+    var settingsOpen by remember { mutableStateOf(false) }
     var infoUuid by remember { mutableStateOf<String?>(null) }
     // A history swap still awaiting its deposit, reopened on the deposit-instructions screen.
     var resumeUuid by remember { mutableStateOf<String?>(null) }
@@ -93,6 +96,11 @@ private fun SwapApp() {
     val needsRefund = data?.provider?.requiresRefundAddress == true
 
     when {
+        settingsOpen -> {
+            BackHandler { settingsOpen = false }
+            DebugSettingsScreen(onBack = { settingsOpen = false })
+        }
+
         resumeUuid != null -> {
             BackHandler { resumeUuid = null }
             val viewModel = viewModel<ResumedSwapViewModel>(
@@ -141,6 +149,7 @@ private fun SwapApp() {
         data == null -> MainSwapScreen(
             onClose = { /* root screen — nothing to go back to */ },
             onOpenHistory = { historyOpen = true },
+            onOpenSettings = { settingsOpen = true },
             onProceed = { amountIn, tokenIn, tokenOut, provider, amountOut, fiatIn, fiatOut ->
                 proceed = ProceedData(amountIn, tokenIn, tokenOut, provider, amountOut, fiatIn, fiatOut)
             },

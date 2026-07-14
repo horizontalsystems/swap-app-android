@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.SvgDecoder
+import io.horizontalsystems.swapapp.settings.DebugSettings
 
 /**
  * Supplies Coil's app-wide [ImageLoader] with an SVG decoder, so token logos from `/tokens/all`
@@ -12,6 +13,11 @@ import coil.decode.SvgDecoder
  * configuration.
  */
 class SwapApplication : Application(), ImageLoaderFactory {
+    override fun onCreate() {
+        super.onCreate()
+        DebugSettings.init(this)
+    }
+
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .components { add(SvgDecoder.Factory()) }

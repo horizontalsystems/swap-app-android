@@ -37,6 +37,7 @@ import io.horizontalsystems.swapapp.compose.ComposeAppTheme
 import io.horizontalsystems.swapapp.compose.components.HSpacer
 import io.horizontalsystems.swapapp.compose.components.HsDivider
 import io.horizontalsystems.swapapp.compose.components.VSpacer
+import io.horizontalsystems.swapapp.settings.DebugSettings
 import java.math.BigDecimal
 
 /**
@@ -57,9 +58,12 @@ fun SwapSelectRouteScreen(
 ) {
     var sortType by rememberSaveable { mutableStateOf(RouteSortType.BestRate) }
     var showSortDialog by remember { mutableStateOf(false) }
+    val showProviderNames = DebugSettings.showRouteProviderNames
     // Recomputed from the quotes passed in on every open, so the list always reflects the current
     // quote set — no retained ViewModel snapshot that could go stale vs the swap screen.
-    val items = remember(quotes, sortType, priceOut) { routeViewItems(quotes, sortType, priceOut) }
+    val items = remember(quotes, sortType, priceOut, showProviderNames) {
+        routeViewItems(quotes, sortType, priceOut, showProviderNames)
+    }
 
     HSScaffold(title = "Routes", onBack = onClose) {
         Column(
@@ -139,6 +143,14 @@ private fun RouteCell(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = spacedBy(3.dp),
                 ) {
+                    // Debug-only: reveal which provider backs this route.
+                    item.providerName?.let {
+                        Text(
+                            text = it,
+                            style = ComposeAppTheme.typography.caption,
+                            color = ComposeAppTheme.colors.grey,
+                        )
+                    }
                     Text(
                         text = item.amountOut,
                         style = ComposeAppTheme.typography.subhead,

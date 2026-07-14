@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.horizontalsystems.swapapp.BuildConfig
 import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.HSScaffold
 import io.horizontalsystems.swapapp.compose.ComposeAppTheme
@@ -71,6 +72,7 @@ private enum class SelectTarget { In, Out }
 fun MainSwapScreen(
     onClose: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenSettings: () -> Unit,
     onProceed: (
         amountIn: BigDecimal,
         tokenIn: SwapToken,
@@ -128,6 +130,7 @@ fun MainSwapScreen(
             uiState = uiState,
             onClose = onClose,
             onOpenHistory = onOpenHistory,
+            onOpenSettings = onOpenSettings,
             onEnterAmount = viewModel::onEnterAmount,
             onSwitchPairs = viewModel::onSwitchPairs,
             onClickTokenIn = { selecting = SelectTarget.In },
@@ -151,6 +154,7 @@ private fun SwapForm(
     uiState: MainSwapUiState,
     onClose: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenSettings: () -> Unit,
     onEnterAmount: (BigDecimal?) -> Unit,
     onSwitchPairs: () -> Unit,
     onClickTokenIn: () -> Unit,
@@ -160,14 +164,27 @@ private fun SwapForm(
 ) {
     HSScaffold(
         title = "Swap",
-        menuItems = listOf(
-            MenuItem(
-                title = TranslatableString.PlainString("Swap History"),
-                icon = R.drawable.clock_24,
-                tint = ComposeAppTheme.colors.grey,
-                onClick = onOpenHistory,
-            ),
-        ),
+        menuItems = buildList {
+            add(
+                MenuItem(
+                    title = TranslatableString.PlainString("Swap History"),
+                    icon = R.drawable.clock_24,
+                    tint = ComposeAppTheme.colors.grey,
+                    onClick = onOpenHistory,
+                )
+            )
+            // Debug-only entry point to the debug settings screen.
+            if (BuildConfig.DEBUG) {
+                add(
+                    MenuItem(
+                        title = TranslatableString.PlainString("Settings"),
+                        icon = R.drawable.settings_24,
+                        tint = ComposeAppTheme.colors.grey,
+                        onClick = onOpenSettings,
+                    )
+                )
+            }
+        },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Two token rows separated by a divider, with the switch button centered on it.
