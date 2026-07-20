@@ -45,17 +45,17 @@ private data class OnboardingSlide(
 
 private val slides = listOf(
     OnboardingSlide(
-        image = R.drawable.image1,
+        image = R.drawable.intro_1,
         title = "Any Coin, Any Chain",
         description = "Cross-chain Swap",
     ),
     OnboardingSlide(
-        image = R.drawable.image2,
+        image = R.drawable.intro_2,
         title = "No KYC, No Signup",
         description = "Swap without verifications",
     ),
     OnboardingSlide(
-        image = R.drawable.image3,
+        image = R.drawable.intro_3,
         title = "Best rates",
         description = "Multiple Providers in one",
     ),
