@@ -87,14 +87,12 @@ android {
             signingConfig = signingConfigs.findByName("release")
 
             // Release-specific service config: a <NAME>_RELEASE entry in local.properties
-            // overrides the defaultConfig value for release builds only.
+            // overrides the defaultConfig value for release builds only. HashDit and Chainalysis
+            // share the same URL and key across dev and release, so they use the defaultConfig
+            // value in both build types and are intentionally omitted here.
             listOf(
                 "SWAP_API_BASE_URL",
                 "SWAP_API_KEY",
-                "HASHDIT_BASE_URL",
-                "HASHDIT_API_KEY",
-                "CHAINALYSIS_BASE_URL",
-                "CHAINALYSIS_API_KEY",
             ).forEach { name ->
                 localProps.getProperty("${name}_RELEASE")?.let { value ->
                     buildConfigField("String", name, "\"$value\"")
