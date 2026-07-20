@@ -1,4 +1,5 @@
 <resources>
-    <string name="app_name">Swap App</string>
+    <string name="app_name">Freeman Exchange</string>
+    <string name="launcher_name">Freeman</string>
     <string name="Button_Back">Back</string>
 </resources>
