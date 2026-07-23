@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.horizontalsystems.swapapp"
+        applicationId = "freeman.exchange"
         minSdk = 28
         targetSdk = 37
         versionCode = 1
