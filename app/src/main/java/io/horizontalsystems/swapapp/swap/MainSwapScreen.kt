@@ -87,6 +87,7 @@ fun MainSwapScreen(
     val uiState = viewModel.uiState
     var selecting by remember { mutableStateOf<SelectTarget?>(null) }
     var showProviders by remember { mutableStateOf(false) }
+    var showScoreInfo by remember { mutableStateOf(false) }
 
     // System back gesture/button closes an open overlay instead of falling through to the activity.
     BackHandler(enabled = selecting != null || showProviders) {
@@ -126,26 +127,33 @@ fun MainSwapScreen(
             onClose = { showProviders = false },
         )
 
-        else -> SwapForm(
-            uiState = uiState,
-            onClose = onClose,
-            onOpenHistory = onOpenHistory,
-            onOpenSettings = onOpenSettings,
-            onEnterAmount = viewModel::onEnterAmount,
-            onSwitchPairs = viewModel::onSwitchPairs,
-            onClickTokenIn = { selecting = SelectTarget.In },
-            onClickTokenOut = { selecting = SelectTarget.Out },
-            onClickProviders = { showProviders = true },
-            onClickNext = {
-                val s = uiState
-                if (s.canProceed) {
-                    onProceed(
-                        s.amountIn!!, s.tokenIn!!, s.tokenOut!!, s.selectedProvider!!,
-                        s.amountOut, s.fiatIn, s.fiatOut,
-                    )
-                }
-            },
-        )
+        else -> {
+            SwapForm(
+                uiState = uiState,
+                onClose = onClose,
+                onOpenHistory = onOpenHistory,
+                onOpenSettings = onOpenSettings,
+                onEnterAmount = viewModel::onEnterAmount,
+                onSwitchPairs = viewModel::onSwitchPairs,
+                onClickTokenIn = { selecting = SelectTarget.In },
+                onClickTokenOut = { selecting = SelectTarget.Out },
+                onClickProviders = { showProviders = true },
+                onClickScore = { showScoreInfo = true },
+                onClickNext = {
+                    val s = uiState
+                    if (s.canProceed) {
+                        onProceed(
+                            s.amountIn!!, s.tokenIn!!, s.tokenOut!!, s.selectedProvider!!,
+                            s.amountOut, s.fiatIn, s.fiatOut,
+                        )
+                    }
+                },
+            )
+
+            if (showScoreInfo) {
+                RouteScoreInfoSheet(onDismiss = { showScoreInfo = false })
+            }
+        }
     }
 }
 
@@ -160,6 +168,7 @@ private fun SwapForm(
     onClickTokenIn: () -> Unit,
     onClickTokenOut: () -> Unit,
     onClickProviders: () -> Unit,
+    onClickScore: () -> Unit,
     onClickNext: () -> Unit,
 ) {
     HSScaffold(
@@ -249,6 +258,10 @@ private fun SwapForm(
                         onClickRoute = onClickProviders,
                         onClickPrice = { showRegularPrice = !showRegularPrice },
                     )
+                    // Route safety rating of the winning quote, opening the score explainer sheet.
+                    RouteRating.from(uiState.quote?.amlPolicy)?.let { rating ->
+                        ProviderScoreRow(rating = rating, onClick = onClickScore)
+                    }
                 }
                 uiState.error?.let {
                     Text(

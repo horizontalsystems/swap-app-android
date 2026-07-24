@@ -25,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.horizontalsystems.swapapp.R
 import io.horizontalsystems.swapapp.components.BoxBordered
@@ -58,6 +57,7 @@ fun SwapSelectRouteScreen(
 ) {
     var sortType by rememberSaveable { mutableStateOf(RouteSortType.BestRate) }
     var showSortDialog by remember { mutableStateOf(false) }
+    var showScoreInfo by remember { mutableStateOf(false) }
     val showProviderNames = DebugSettings.showRouteProviderNames
     // Recomputed from the quotes passed in on every open, so the list always reflects the current
     // quote set — no retained ViewModel snapshot that could go stale vs the swap screen.
@@ -99,6 +99,7 @@ fun SwapSelectRouteScreen(
                             item = item,
                             isSelected = isSelected,
                             onClick = { onSelectQuote(item.quote) },
+                            onClickRating = { showScoreInfo = true },
                         )
                     }
                 }
@@ -115,6 +116,10 @@ fun SwapSelectRouteScreen(
             onSelectItem = { sortType = it },
         )
     }
+
+    if (showScoreInfo) {
+        RouteScoreInfoSheet(onDismiss = { showScoreInfo = false })
+    }
 }
 
 @Composable
@@ -122,6 +127,7 @@ private fun RouteCell(
     item: RouteViewItem,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onClickRating: () -> Unit,
 ) {
     CellPrimary(
         left = {
@@ -179,7 +185,16 @@ private fun RouteCell(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = spacedBy(3.dp),
                 ) {
-                    item.rating?.let { RatingBadge(it) }
+                    item.rating?.let { rating ->
+                        RatingBadge(
+                            rating = rating,
+                            modifier = Modifier.clickable(
+                                interactionSource = null,
+                                indication = null,
+                                onClick = onClickRating,
+                            ),
+                        )
+                    }
                     Text(
                         text = item.estimatedTime,
                         style = ComposeAppTheme.typography.subheadSB,
@@ -190,32 +205,6 @@ private fun RouteCell(
         },
         onClick = onClick,
     )
-}
-
-/** The safety rating: colored label + 20dp icon, matching the reference's `RiskScore`. */
-@Composable
-private fun RatingBadge(rating: RouteRating) {
-    val (color, icon) = when (rating) {
-        RouteRating.Excellent -> ComposeAppTheme.colors.remus to R.drawable.star_filled_24
-        RouteRating.Good -> ComposeAppTheme.colors.issykBlue to R.drawable.shield_check_filled_24
-        RouteRating.Fair -> ComposeAppTheme.colors.jacob to R.drawable.thumbsup_24
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = rating.label,
-            style = ComposeAppTheme.typography.subheadSB,
-            color = color,
-            overflow = TextOverflow.Ellipsis,
-            maxLines = 1,
-        )
-        HSpacer(4.dp)
-        Icon(
-            painter = painterResource(icon),
-            modifier = Modifier.size(20.dp),
-            tint = color,
-            contentDescription = null,
-        )
-    }
 }
 
 /** Secondary/solid dropdown pill matching the reference's `HSDropdownButton`. */
