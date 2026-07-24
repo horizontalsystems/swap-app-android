@@ -43,6 +43,19 @@ class SwapSelectCoinViewModel(
         loadSections()
     }
 
+    /**
+     * Clears the search query and results. Called when the screen is (re)opened so a query typed in
+     * a previous visit doesn't linger — this ViewModel is retained in the Activity's ViewModelStore
+     * and survives the screen leaving composition.
+     */
+    fun reset() {
+        searchJob?.cancel()
+        query = ""
+        searchResults = emptyList()
+        error = false
+        uiState = buildState()
+    }
+
     fun setQuery(q: String) {
         query = q
         searchJob?.cancel()

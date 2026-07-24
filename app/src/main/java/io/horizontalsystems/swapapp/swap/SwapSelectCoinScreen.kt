@@ -21,6 +21,7 @@ import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +64,12 @@ fun SwapSelectCoinScreen(
         factory = SwapSelectCoinViewModel.Factory(otherSelectedToken)
     )
     val uiState = viewModel.uiState
+
+    // The ViewModel is retained across the screen being closed and reopened, so drop any query
+    // left over from a previous visit when this screen re-enters composition.
+    LaunchedEffect(Unit) {
+        viewModel.reset()
+    }
 
     HSScaffold(
         title = title,
